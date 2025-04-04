@@ -1,0 +1,10 @@
+Schlongs of Skyrim - Core.esm
+Schlongs of Skyrim.esp
+SOS - B3lisario UNP Addon.esp
+SOS - ERF - HighPoly Addon.esp
+SOS - Smurf Average Addon.esp
+SOS - VectorPlexus Muscular Addon.esp
+SOS - VectorPlexus Regular Addon.esp
+SkyFem NPC.esp
+HentaiCreatures.esp
+MoreNastyCritters.esp
