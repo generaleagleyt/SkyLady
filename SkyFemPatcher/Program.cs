@@ -6,18 +6,19 @@ using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 using Mutagen.Bethesda.Plugins.Assets;
 
-namespace SkyFemPatcher
+namespace SkyFemPatcher.SkyFemPatcher
 {
     public class Program
     {
         public static async Task<int> Main(string[] args)
         {
             return await SynthesisPipeline.Instance
-                .AddPatch<ISkyrimMod, ISkyrimModGetter>(RunPatch)
-                .Run(args, new RunPreferences());
+                .AddPatch<ISkyrimMod, ISkyrimModGetter>(Patch)
+                .SetTypicalOpen(GameRelease.SkyrimSE, "SkyFem Patcher.esp")
+                .Run(args);
         }
 
-        public static void RunPatch(IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
+        public static void Patch(IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
         {
             Console.WriteLine("SkyFem Patcher (Side) running on .NET 8.0...");
             var racesPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyFem Patcher", "SkyFem races.txt");
@@ -65,57 +66,35 @@ namespace SkyFemPatcher
                     // Set Female flag
                     patchedNpc.Configuration.Flags |= NpcConfiguration.Flag.Female;
 
-                    // Copy facegen files with EnumerateAssetLinks
+                    // Debug facegen assets
                     var npcFid = npc.FormKey.IDString();
                     var templateFid = template.FormKey.IDString();
-                    var outputModFolder = Path.Combine("G:\\LoreRim\\mods\\SkyFem Patcher");
-
-                    // Get asset links from the template NPC
-                    var assets = template.EnumerateAssetLinks(AssetLinkQuery.Listed);
-                    var faceGeomRelPath = assets.FirstOrDefault(a => a.RawPath.EndsWith(".nif"))?.RawPath;
-                    var faceTintRelPath = assets.FirstOrDefault(a => a.RawPath.EndsWith(".dds"))?.RawPath;
-
-                    string? faceGeomSrc = faceGeomRelPath != null ? Path.Combine(state.DataFolderPath, faceGeomRelPath) : null;
-                    string? faceTintSrc = faceTintRelPath != null ? Path.Combine(state.DataFolderPath, faceTintRelPath) : null;
-                    var faceGeomDest = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", state.PatchMod.ModKey.FileName, $"00{npcFid}.nif");
-                    var faceTintDest = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", state.PatchMod.ModKey.FileName, $"00{npcFid}.dds");
-
-                    if (faceGeomSrc != null)
+                    Console.WriteLine($"Template: {template.EditorID ?? "Unnamed"} ({templateFid})");
+                    var listedAssets = template.EnumerateAssetLinks(AssetLinkQuery.Listed).ToList();
+                    var inferredAssets = template.EnumerateAssetLinks(AssetLinkQuery.Inferred).ToList();
+                    Console.WriteLine($"Listed Assets ({listedAssets.Count}):");
+                    if (listedAssets.Count == 0)
                     {
-                        Console.WriteLine($"Checking facegen - Geom Src: {faceGeomSrc}, Exists: {File.Exists(faceGeomSrc)}");
-                        if (File.Exists(faceGeomSrc))
-                        {
-                            Directory.CreateDirectory(Path.GetDirectoryName(faceGeomDest)!);
-                            File.Copy(faceGeomSrc, faceGeomDest, true);
-                            Console.WriteLine($"Copied facegen to: {faceGeomDest}");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Warning: No facegeom file found at {faceGeomSrc} for {template.EditorID ?? "Unnamed"} ({templateFid})");
-                        }
+                        Console.WriteLine("  No listed asset links found.");
                     }
                     else
                     {
-                        Console.WriteLine($"Warning: No .nif asset link found for {template.EditorID ?? "Unnamed"} ({templateFid})");
+                        foreach (var asset in listedAssets)
+                        {
+                            Console.WriteLine($"  Listed Asset: {asset} (Type: {asset.GetType().Name})");
+                        }
                     }
-
-                    if (faceTintSrc != null)
+                    Console.WriteLine($"Inferred Assets ({inferredAssets.Count}):");
+                    if (inferredAssets.Count == 0)
                     {
-                        Console.WriteLine($"Checking facegen - Tint Src: {faceTintSrc}, Exists: {File.Exists(faceTintSrc)}");
-                        if (File.Exists(faceTintSrc))
-                        {
-                            Directory.CreateDirectory(Path.GetDirectoryName(faceTintDest)!);
-                            File.Copy(faceTintSrc, faceTintDest, true);
-                            Console.WriteLine($"Copied facegen to: {faceTintDest}");
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Warning: No facetint file found at {faceTintSrc} for {template.EditorID ?? "Unnamed"} ({templateFid})");
-                        }
+                        Console.WriteLine("  No inferred asset links found.");
                     }
                     else
                     {
-                        Console.WriteLine($"Warning: No .dds asset link found for {template.EditorID ?? "Unnamed"} ({templateFid})");
+                        foreach (var asset in inferredAssets)
+                        {
+                            Console.WriteLine($"  Inferred Asset: {asset} (Type: {asset.GetType().Name})");
+                        }
                     }
 
                     Console.WriteLine($"Patched Male NPC: {npc.EditorID ?? "Unnamed"} with {template.EditorID ?? "Unnamed"} (Race: {race})");
