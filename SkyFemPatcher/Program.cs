@@ -4,7 +4,6 @@ using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
-using Mutagen.Bethesda.Plugins.Assets;
 
 namespace SkyFemPatcher.SkyFemPatcher
 {
@@ -66,35 +65,38 @@ namespace SkyFemPatcher.SkyFemPatcher
                     // Set Female flag
                     patchedNpc.Configuration.Flags |= NpcConfiguration.Flag.Female;
 
-                    // Debug facegen assets
+                    // Copy facegen files (manual paths from NPCAppearanceCopier)
                     var npcFid = npc.FormKey.IDString();
                     var templateFid = template.FormKey.IDString();
-                    Console.WriteLine($"Template: {template.EditorID ?? "Unnamed"} ({templateFid})");
-                    var listedAssets = template.EnumerateAssetLinks(AssetLinkQuery.Listed).ToList();
-                    var inferredAssets = template.EnumerateAssetLinks(AssetLinkQuery.Inferred).ToList();
-                    Console.WriteLine($"Listed Assets ({listedAssets.Count}):");
-                    if (listedAssets.Count == 0)
+                    var templateFileName = template.FormKey.ModKey.FileName.ToString();
+                    var templateNifPath = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", templateFileName, $"00{templateFid}.nif");
+                    var templateDdsPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", templateFileName, $"00{templateFid}.dds");
+                    var outputModFolder = "G:\\LoreRim\\mods\\SkyFem Patcher";
+                    var patchedNifPath = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", state.PatchMod.ModKey.FileName, $"00{npcFid}.nif");
+                    var patchedDdsPath = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", state.PatchMod.ModKey.FileName, $"00{npcFid}.dds");
+
+                    // Copy .nif
+                    if (File.Exists(templateNifPath))
                     {
-                        Console.WriteLine("  No listed asset links found.");
+                        Directory.CreateDirectory(Path.GetDirectoryName(patchedNifPath)!);
+                        File.Copy(templateNifPath, patchedNifPath, true);
+                        Console.WriteLine($"Copied facegen .nif to: {patchedNifPath}");
                     }
                     else
                     {
-                        foreach (var asset in listedAssets)
-                        {
-                            Console.WriteLine($"  Listed Asset: {asset} (Type: {asset.GetType().Name})");
-                        }
+                        Console.WriteLine($"Warning: No facegen .nif found for template {template.EditorID ?? "Unnamed"} ({templateFid}) at {templateNifPath}");
                     }
-                    Console.WriteLine($"Inferred Assets ({inferredAssets.Count}):");
-                    if (inferredAssets.Count == 0)
+
+                    // Copy .dds
+                    if (File.Exists(templateDdsPath))
                     {
-                        Console.WriteLine("  No inferred asset links found.");
+                        Directory.CreateDirectory(Path.GetDirectoryName(patchedDdsPath)!);
+                        File.Copy(templateDdsPath, patchedDdsPath, true);
+                        Console.WriteLine($"Copied facegen .dds to: {patchedDdsPath}");
                     }
                     else
                     {
-                        foreach (var asset in inferredAssets)
-                        {
-                            Console.WriteLine($"  Inferred Asset: {asset} (Type: {asset.GetType().Name})");
-                        }
+                        Console.WriteLine($"Warning: No facegen .dds found for template {template.EditorID ?? "Unnamed"} ({templateFid}) at {templateDdsPath}");
                     }
 
                     Console.WriteLine($"Patched Male NPC: {npc.EditorID ?? "Unnamed"} with {template.EditorID ?? "Unnamed"} (Race: {race})");
