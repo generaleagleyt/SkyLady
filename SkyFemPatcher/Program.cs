@@ -2,7 +2,9 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Synthesis;
 using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
+using Mutagen.Bethesda.Plugins.Assets;
 
 namespace SkyFemPatcher
 {
@@ -63,39 +65,57 @@ namespace SkyFemPatcher
                     // Set Female flag
                     patchedNpc.Configuration.Flags |= NpcConfiguration.Flag.Female;
 
-                    // Copy facegen files
-                    var npcFileName = npc.FormKey.ModKey.FileName;
+                    // Copy facegen files with EnumerateAssetLinks
                     var npcFid = npc.FormKey.IDString();
-                    var templateFileName = template.FormKey.ModKey.FileName.ToString();
                     var templateFid = template.FormKey.IDString();
+                    var outputModFolder = Path.Combine("G:\\LoreRim\\mods\\SkyFem Patcher");
 
-                    var faceGeomSrc = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", templateFileName, $"00{templateFid}.nif");
-                    var faceTintSrc = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", templateFileName, $"00{templateFid}.dds");
-                    var faceGeomDest = Path.Combine("G:\\LoreRim\\mods\\SkyFem Patcher", "meshes", "actors", "character", "facegendata", "facegeom", state.PatchMod.ModKey.FileName, $"00{npcFid}.nif");
-                    var faceTintDest = Path.Combine("G:\\LoreRim\\mods\\SkyFem Patcher", "textures", "actors", "character", "facegendata", "facetint", state.PatchMod.ModKey.FileName, $"00{npcFid}.dds");
+                    // Get asset links from the template NPC
+                    var assets = template.EnumerateAssetLinks(AssetLinkQuery.Listed);
+                    var faceGeomRelPath = assets.FirstOrDefault(a => a.RawPath.EndsWith(".nif"))?.RawPath;
+                    var faceTintRelPath = assets.FirstOrDefault(a => a.RawPath.EndsWith(".dds"))?.RawPath;
 
-                    Console.WriteLine($"Checking facegen - Geom Src: {faceGeomSrc}, Exists: {File.Exists(faceGeomSrc)}");
-                    Console.WriteLine($"Checking facegen - Tint Src: {faceTintSrc}, Exists: {File.Exists(faceTintSrc)}");
+                    string? faceGeomSrc = faceGeomRelPath != null ? Path.Combine(state.DataFolderPath, faceGeomRelPath) : null;
+                    string? faceTintSrc = faceTintRelPath != null ? Path.Combine(state.DataFolderPath, faceTintRelPath) : null;
+                    var faceGeomDest = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", state.PatchMod.ModKey.FileName, $"00{npcFid}.nif");
+                    var faceTintDest = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", state.PatchMod.ModKey.FileName, $"00{npcFid}.dds");
 
-                    if (File.Exists(faceGeomSrc))
+                    if (faceGeomSrc != null)
                     {
-                        Directory.CreateDirectory(Path.GetDirectoryName(faceGeomDest)!);
-                        File.Copy(faceGeomSrc, faceGeomDest, true);
-                        Console.WriteLine($"Copied facegen to: {faceGeomDest}");
+                        Console.WriteLine($"Checking facegen - Geom Src: {faceGeomSrc}, Exists: {File.Exists(faceGeomSrc)}");
+                        if (File.Exists(faceGeomSrc))
+                        {
+                            Directory.CreateDirectory(Path.GetDirectoryName(faceGeomDest)!);
+                            File.Copy(faceGeomSrc, faceGeomDest, true);
+                            Console.WriteLine($"Copied facegen to: {faceGeomDest}");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Warning: No facegeom file found at {faceGeomSrc} for {template.EditorID ?? "Unnamed"} ({templateFid})");
+                        }
                     }
                     else
                     {
-                        Console.WriteLine($"Warning: No facegeom file found for {template.EditorID ?? "Unnamed"} ({templateFid}) in {templateFileName}");
+                        Console.WriteLine($"Warning: No .nif asset link found for {template.EditorID ?? "Unnamed"} ({templateFid})");
                     }
-                    if (File.Exists(faceTintSrc))
+
+                    if (faceTintSrc != null)
                     {
-                        Directory.CreateDirectory(Path.GetDirectoryName(faceTintDest)!);
-                        File.Copy(faceTintSrc, faceTintDest, true);
-                        Console.WriteLine($"Copied facegen to: {faceTintDest}");
+                        Console.WriteLine($"Checking facegen - Tint Src: {faceTintSrc}, Exists: {File.Exists(faceTintSrc)}");
+                        if (File.Exists(faceTintSrc))
+                        {
+                            Directory.CreateDirectory(Path.GetDirectoryName(faceTintDest)!);
+                            File.Copy(faceTintSrc, faceTintDest, true);
+                            Console.WriteLine($"Copied facegen to: {faceTintDest}");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Warning: No facetint file found at {faceTintSrc} for {template.EditorID ?? "Unnamed"} ({templateFid})");
+                        }
                     }
                     else
                     {
-                        Console.WriteLine($"Warning: No facetint file found for {template.EditorID ?? "Unnamed"} ({templateFid}) in {templateFileName}");
+                        Console.WriteLine($"Warning: No .dds asset link found for {template.EditorID ?? "Unnamed"} ({templateFid})");
                     }
 
                     Console.WriteLine($"Patched Male NPC: {npc.EditorID ?? "Unnamed"} with {template.EditorID ?? "Unnamed"} (Race: {race})");
