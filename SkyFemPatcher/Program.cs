@@ -25,7 +25,7 @@ namespace SkyFemPatcher.SkyFemPatcher
             var racesPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyFem Patcher", "SkyFem races.txt");
             var partsToCopyPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyFem Patcher", "SkyFem partsToCopy.txt");
             var blacklistPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyFem Patcher", "SkyFem blacklist.txt");
-            var humanoidRaces = new HashSet<string>(File.ReadAllLines(racesPath).Select(line => line.Split(' ')[0].Trim()));
+            var humanoidRaces = new HashSet<string>(File.ReadAllLines(racesPath).Select(line => line.Trim()));
             var partsToCopy = File.ReadAllLines(partsToCopyPath).ToHashSet();
             HashSet<string> blacklistedMods = File.Exists(blacklistPath) ? [.. File.ReadAllLines(blacklistPath).Select(line => line.Trim())] : [];
             // Add known problematic mods to the blacklist by default
@@ -33,12 +33,8 @@ namespace SkyFemPatcher.SkyFemPatcher
             blacklistedMods.Add("SexyBanditCaptives.esp");
             blacklistedMods.Add("Harem 2 AIO Armored.esp");
             blacklistedMods.Add("Damsels The Caged Rose.esp");
-            blacklistedMods.Add("AnukethFollowers2.esp");
             blacklistedMods.Add("WindhelmSSE.esp");
-            blacklistedMods.Add("Harem Volume IV.esp");
             blacklistedMods.Add("Deviously Cursed Loot.esp");
-            blacklistedMods.Add("YurianaWench.esp");
-            blacklistedMods.Add("Demon Laufey.esp");
             blacklistedMods.Add("Skyrim.esm");
             blacklistedMods.Add("[AMI] COCO Succubus.esp");
             var femaleTemplatesByRace = new Dictionary<string, List<INpcGetter>>();
@@ -46,6 +42,40 @@ namespace SkyFemPatcher.SkyFemPatcher
             var skippedTemplates = new Dictionary<string, (string ModName, string Reason)>();
             var random = new Random();
             var requiemKey = ModKey.FromNameAndExtension("Coldhaven.esm");
+
+            // Race compatibility mapping (e.g., NordRace and NordRaceVampire are compatible)
+            var raceCompatibilityMap = new Dictionary<string, List<string>>
+            {
+                { "NordRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace" } },
+                { "NordRaceVampire", new List<string> { "NordRace", "NordRaceVampire", "HothRace" } },
+                { "HothRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace" } },
+                { "DarkElfRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+                { "DarkElfRaceVampire", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+                { "_00DwemerRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+                { "MASNerevarineRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+                { "ArgonianRace", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
+                { "ArgonianRaceVampire", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
+                { "KhajiitRace", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
+                { "KhajiitRaceVampire", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
+                { "HighElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+                { "HighElfRaceVampire", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+                { "SnowElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+                { "WB_ConjureCraftlord_Race", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+                { "WoodElfRace", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
+                { "WoodElfRaceVampire", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
+                { "BretonRace", new List<string> { "BretonRace", "BretonRaceVampire" } },
+                { "BretonRaceVampire", new List<string> { "BretonRace", "BretonRaceVampire" } },
+                { "ImperialRace", new List<string> { "ImperialRace", "ImperialRaceVampire" } },
+                { "ImperialRaceVampire", new List<string> { "ImperialRace", "ImperialRaceVampire" } },
+                { "RedguardRace", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
+                { "RedguardRaceVampire", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
+                { "OrcRace", new List<string> { "OrcRace", "OrcRaceVampire" } },
+                { "OrcRaceVampire", new List<string> { "OrcRace", "OrcRaceVampire" } },
+                { "ElderRace", new List<string> { "ElderRace", "ElderRaceVampire" } },
+                { "ElderRaceVampire", new List<string> { "ElderRace", "ElderRaceVampire" } },
+                { "DremoraRace", new List<string> { "DremoraRace" } },
+                { "DA13AfflictedRace", new List<string> { "DA13AfflictedRace" } }
+            };
 
             // Voice type mapping (male to female)
             var voiceTypeMap = new Dictionary<string, string>
@@ -130,6 +160,11 @@ namespace SkyFemPatcher.SkyFemPatcher
             Console.WriteLine($"Collected templates for {femaleTemplatesByRace.Count} races.");
             Console.WriteLine($"Total male humanoid NPCs in Coldhaven.esm: {maleNpcCount}");
 
+            foreach (var race in femaleTemplatesByRace.Keys.OrderBy(r => r))
+            {
+                Console.WriteLine($"Found {femaleTemplatesByRace[race].Count} female templates for race {race}");
+            }
+
             // Patch Coldhaven male NPCs
             foreach (var npc in state.LoadOrder.PriorityOrder.Npc().WinningOverrides())
             {
@@ -138,7 +173,11 @@ namespace SkyFemPatcher.SkyFemPatcher
                     continue;
 
                 var npcFid = npc.FormKey.IDString();
-                if (femaleTemplatesByRace.TryGetValue(race, out var templates) && templates.Count > 0)
+                var compatibleRaces = raceCompatibilityMap.TryGetValue(race, out var races) ? races : [race];
+                var templates = compatibleRaces
+                    .SelectMany(r => femaleTemplatesByRace.TryGetValue(r, out var t) ? t : [])
+                    .ToList();
+                if (templates.Count > 0)
                 {
                     var patchedNpc = state.PatchMod.Npcs.GetOrAddAsOverride(npc);
                     INpcGetter? template = null;
@@ -198,16 +237,7 @@ namespace SkyFemPatcher.SkyFemPatcher
                         try
                         {
                             var nifContent = File.ReadAllText(templateNifPath);
-                            // Check for male texture directory, ignoring BlankDetailmap.dds
-                            if (nifContent.Contains(@"textures\actors\character\male\", StringComparison.OrdinalIgnoreCase) &&
-                                !nifContent.Contains(@"textures\actors\character\male\blankdetailmap.dds", StringComparison.OrdinalIgnoreCase))
-                            {
-                                Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({templateFid}) from {templateFileName} for NPC {npc.EditorID ?? "Unnamed"} - .nif file references male textures, which may cause rendering issues. Consider adding '{templateFileName}' to SkyFem blacklist.txt.");
-                                skippedTemplates[template.EditorID ?? "Unnamed"] = (templateFileName, "Male texture references detected");
-                                continue;
-                            }
-
-                            // Extract and validate texture paths
+                            // Extract active texture paths from BSShaderTextureSet blocks
                             var texturePaths = new List<string>();
                             var lines = nifContent.Split(LineSeparators, StringSplitOptions.RemoveEmptyEntries);
                             bool inTextureSet = false;
@@ -232,6 +262,16 @@ namespace SkyFemPatcher.SkyFemPatcher
                                 {
                                     inTextureSet = false;
                                 }
+                            }
+
+                            // Check if any active texture path references male textures (excluding BlankDetailmap.dds and KhajiitMouth textures)
+                            if (texturePaths.Any(path => path.Contains(@"textures\actors\character\male\", StringComparison.OrdinalIgnoreCase) &&
+                                !path.Contains(@"textures\actors\character\male\blankdetailmap.dds", StringComparison.OrdinalIgnoreCase) &&
+                                !(path.Contains(@"textures\actors\character\khajiitmale\", StringComparison.OrdinalIgnoreCase) && path.Contains("khajiitmouth", StringComparison.OrdinalIgnoreCase))))
+                            {
+                                Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({templateFid}) from {templateFileName} for NPC {npc.EditorID ?? "Unnamed"} - .nif file references male textures, which may cause rendering issues. Consider adding '{templateFileName}' to SkyFem blacklist.txt.");
+                                skippedTemplates[template.EditorID ?? "Unnamed"] = (templateFileName, "Male texture references detected");
+                                continue;
                             }
 
                             // Check if each texture exists
