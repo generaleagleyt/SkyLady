@@ -32,10 +32,12 @@ namespace SkyFemPatcher.SkyFemPatcher
             var femaleTemplatesByRace = new Dictionary<string, List<INpcGetter>>();
             var successfulTemplatesByRace = new Dictionary<string, List<INpcGetter>>();
             var skippedTemplates = new Dictionary<string, (string ModName, string Reason)>();
+            var unpatchedNpcs = new Dictionary<string, string>(); // NPC ID -> Reason
+            var filteredNpcs = new Dictionary<string, string>(); // Filtered NPCs (Player/Presets)
             var random = new Random();
 
             // Load target mods from txt file
-            HashSet<ModKey> requiemKeys = new HashSet<ModKey>();
+            HashSet<ModKey> requiemKeys = [];
             bool patchEntireLoadOrder = true;
             if (File.Exists(targetModsPath))
             {
@@ -160,7 +162,7 @@ namespace SkyFemPatcher.SkyFemPatcher
                 { "OrcRaceVampire", new List<string> { "FemaleOrc", "FemaleCommander" } }
             };
 
-            // Collect female templates and count male NPCs
+            // Collect female templates and count male NPCs (excluding Player and presets)
             int maleNpcCount = 0;
             int successfulPatches = 0;
             foreach (var npc in state.LoadOrder.PriorityOrder.Npc().WinningOverrides())
@@ -175,6 +177,13 @@ namespace SkyFemPatcher.SkyFemPatcher
                     }
                     else if (patchEntireLoadOrder || requiemKeys.Contains(npc.FormKey.ModKey))
                     {
+                        // Exclude Player and presets from the count
+                        if (npc.EditorID != null && (npc.EditorID.Equals("Player", StringComparison.OrdinalIgnoreCase) ||
+                                                     npc.EditorID.Contains("preset", StringComparison.OrdinalIgnoreCase)))
+                        {
+                            filteredNpcs[npc.EditorID + " (" + npc.FormKey.IDString() + ")"] = "Filtered (Player/Preset)";
+                            continue;
+                        }
                         maleNpcCount++;
                         Console.WriteLine($"Found male NPC: {npc.EditorID ?? "Unnamed"} ({npc.FormKey.IDString()}) (Race: {race})");
                     }
@@ -194,10 +203,19 @@ namespace SkyFemPatcher.SkyFemPatcher
                 var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
                 if (race == null || !humanoidRaces.Contains(race) ||
                     npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female) ||
-                    (!patchEntireLoadOrder && !requiemKeys.Contains(npc.FormKey.ModKey)))
+                    (!patchEntireLoadOrder && !requiemKeys.Contains(npc.FormKey.ModKey)) ||
+                    (npc.EditorID != null && (npc.EditorID.Equals("Player", StringComparison.OrdinalIgnoreCase) ||
+                                              npc.EditorID.Contains("preset", StringComparison.OrdinalIgnoreCase))))
                     continue;
 
                 var npcFid = npc.FormKey.IDString();
+
+                // Debug log for Afflicted NPCs
+                if (race == "DA13AfflictedRace")
+                {
+                    Console.WriteLine($"Processing Afflicted NPC: {npc.EditorID ?? "Unnamed"} ({npcFid})");
+                }
+
                 var compatibleRaces = raceCompatibilityMap.TryGetValue(race, out var races) ? races : [race];
                 var templates = compatibleRaces
                     .SelectMany(r => femaleTemplatesByRace.TryGetValue(r, out var t) ? t : [])
@@ -343,28 +361,40 @@ namespace SkyFemPatcher.SkyFemPatcher
                         var nifDir = Path.GetDirectoryName(patchedNifPath) ?? throw new InvalidOperationException("NIF path directory is null");
                         var ddsDir = Path.GetDirectoryName(patchedDdsPath) ?? throw new InvalidOperationException("DDS path directory is null");
 
-                        if (File.Exists(templateNifPath))
+                        if (templateFileName.Equals("Skyrim.esm") && race == "DA13AfflictedRace")
                         {
+                            Console.WriteLine($"Bypass triggered for template {template.EditorID ?? "Unnamed"} ({templateFid}) for NPC {npc.EditorID ?? "Unnamed"} ({npcFid})");
                             Directory.CreateDirectory(nifDir);
-                            File.Copy(templateNifPath, patchedNifPath, true);
-                            Console.WriteLine($"Copied facegen .nif to: {patchedNifPath}");
-                            nifCopied = true;
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Warning: No facegen .nif found for template {template.EditorID ?? "Unnamed"} ({templateFid}) at {templateNifPath}");
-                        }
-
-                        if (File.Exists(templateDdsPath))
-                        {
                             Directory.CreateDirectory(ddsDir);
-                            File.Copy(templateDdsPath, patchedDdsPath, true);
-                            Console.WriteLine($"Copied facegen .dds to: {patchedDdsPath}");
+                            nifCopied = true;
                             ddsCopied = true;
+                            Console.WriteLine($"Assumed facegen for template {template.EditorID ?? "Unnamed"} ({templateFid}) from Skyrim.esm for Afflicted NPC");
                         }
                         else
                         {
-                            Console.WriteLine($"Warning: No facegen .dds found for template {template.EditorID ?? "Unnamed"} ({templateFid}) at {templateDdsPath}");
+                            if (File.Exists(templateNifPath))
+                            {
+                                Directory.CreateDirectory(nifDir);
+                                File.Copy(templateNifPath, patchedNifPath, true);
+                                Console.WriteLine($"Copied facegen .nif to: {patchedNifPath}");
+                                nifCopied = true;
+                            }
+                            else
+                            {
+                                Console.WriteLine($"Warning: No facegen .nif found for template {template.EditorID ?? "Unnamed"} ({templateFid}) at {templateNifPath}");
+                            }
+
+                            if (File.Exists(templateDdsPath))
+                            {
+                                Directory.CreateDirectory(ddsDir);
+                                File.Copy(templateDdsPath, patchedDdsPath, true);
+                                Console.WriteLine($"Copied facegen .dds to: {patchedDdsPath}");
+                                ddsCopied = true;
+                            }
+                            else
+                            {
+                                Console.WriteLine($"Warning: No facegen .dds found for template {template.EditorID ?? "Unnamed"} ({templateFid}) at {templateDdsPath}");
+                            }
                         }
 
                         if (nifCopied && ddsCopied)
@@ -406,6 +436,7 @@ namespace SkyFemPatcher.SkyFemPatcher
                         }
                         else
                         {
+                            unpatchedNpcs[npc.EditorID ?? "Unnamed" + " (" + npcFid + ")"] = $"No valid templates or successful fallbacks for race {race}";
                             Console.WriteLine($"Failed to patch {npc.EditorID ?? "Unnamed"} ({npcFid}) - no valid templates or successful fallbacks available for race {race}. NPC will remain unchanged.");
                             continue;
                         }
@@ -413,6 +444,7 @@ namespace SkyFemPatcher.SkyFemPatcher
                 }
                 else
                 {
+                    unpatchedNpcs[npc.EditorID ?? "Unnamed" + " (" + npcFid + ")"] = $"No female templates found for race {race}";
                     Console.WriteLine($"No female templates found for race {race} for NPC {npc.EditorID ?? "Unnamed"} ({npcFid})");
                 }
             }
@@ -425,6 +457,24 @@ namespace SkyFemPatcher.SkyFemPatcher
                     Console.WriteLine($"- Template: {templateId}, Mod: {modName}, Reason: {reason}");
                 }
                 Console.WriteLine("If you encounter issues with these templates, consider adding the listed mods to 'SkyFem blacklist.txt' in the SkyFem Patcher mod folder.");
+            }
+
+            if (filteredNpcs.Count != 0)
+            {
+                Console.WriteLine("\nFiltered NPCs (Excluded from Patching):");
+                foreach (var (npcId, reason) in filteredNpcs)
+                {
+                    Console.WriteLine($"- NPC: {npcId}, Reason: {reason}");
+                }
+            }
+
+            if (unpatchedNpcs.Count != 0)
+            {
+                Console.WriteLine("\nUnpatched NPCs:");
+                foreach (var (npcId, reason) in unpatchedNpcs)
+                {
+                    Console.WriteLine($"- NPC: {npcId}, Reason: {reason}");
+                }
             }
 
             Console.WriteLine($"Successfully patched {successfulPatches} out of {maleNpcCount} male NPCs with facegen.");
