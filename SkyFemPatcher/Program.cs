@@ -41,7 +41,7 @@ namespace SkyFemPatcher.SkyFemPatcher
             var successfulTemplatesByRace = new Dictionary<string, List<INpcGetter>>();
             var skippedTemplates = new Dictionary<string, (string ModName, string Reason)>();
             var random = new Random();
-            var requiemKey = ModKey.FromNameAndExtension("Coldhaven.esm");
+            var requiemKey = ModKey.FromNameAndExtension("BBLuxurySuite.esm");
 
             // Race compatibility mapping (e.g., NordRace and NordRaceVampire are compatible)
             var raceCompatibilityMap = new Dictionary<string, List<string>>
@@ -143,7 +143,7 @@ namespace SkyFemPatcher.SkyFemPatcher
             foreach (var npc in state.LoadOrder.PriorityOrder.Npc().WinningOverrides())
             {
                 var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
-                if (race != null && humanoidRaces.Contains(race))
+                if (race != null && humanoidRaces.Contains(race) && race != "ManakinRace") // Skip ManakinRace
                 {
                     if (npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female))
                     {
@@ -158,18 +158,19 @@ namespace SkyFemPatcher.SkyFemPatcher
                 }
             }
             Console.WriteLine($"Collected templates for {femaleTemplatesByRace.Count} races.");
-            Console.WriteLine($"Total male humanoid NPCs in Coldhaven.esm: {maleNpcCount}");
+            Console.WriteLine($"Total male humanoid NPCs in {requiemKey.FileName}: {maleNpcCount}");
 
             foreach (var race in femaleTemplatesByRace.Keys.OrderBy(r => r))
             {
                 Console.WriteLine($"Found {femaleTemplatesByRace[race].Count} female templates for race {race}");
             }
 
-            // Patch Coldhaven male NPCs
+            // Patch male NPCs from BBLuxurySuite.esm
             foreach (var npc in state.LoadOrder.PriorityOrder.Npc().WinningOverrides())
             {
                 var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
-                if (race == null || !humanoidRaces.Contains(race) || npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female) || npc.FormKey.ModKey != requiemKey)
+                if (race == null || !humanoidRaces.Contains(race) || race == "ManakinRace" || // Skip ManakinRace
+                    npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female) || npc.FormKey.ModKey != requiemKey)
                     continue;
 
                 var npcFid = npc.FormKey.IDString();
@@ -180,6 +181,50 @@ namespace SkyFemPatcher.SkyFemPatcher
                 if (templates.Count > 0)
                 {
                     var patchedNpc = state.PatchMod.Npcs.GetOrAddAsOverride(npc);
+
+                    // NEW: Forward non-facegen data from the previous override
+                    var previousOverride = state.LoadOrder.PriorityOrder.Npc()
+                        .WinningOverrides()
+                        .Where(n => n.FormKey == npc.FormKey && !n.Equals(patchedNpc)) // Exclude our patch
+                        .LastOrDefault(); // Get the last override before ours
+                    if (previousOverride != null)
+                    {
+                        // Uncomment below if you want forwarding messages in the output
+                        // Console.WriteLine($"Forwarding non-facegen data for {npc.EditorID ?? "Unnamed"} from {previousOverride.FormKey.ModKey}");
+                        // Forward stats (ACBS block, excluding Female flag which we’ll set ourselves)
+                        patchedNpc.Configuration.Level = previousOverride.Configuration.Level.DeepCopy();
+                        patchedNpc.Configuration.CalcMinLevel = previousOverride.Configuration.CalcMinLevel;
+                        patchedNpc.Configuration.CalcMaxLevel = previousOverride.Configuration.CalcMaxLevel;
+                        patchedNpc.Configuration.HealthOffset = previousOverride.Configuration.HealthOffset;
+                        patchedNpc.Configuration.MagickaOffset = previousOverride.Configuration.MagickaOffset;
+                        patchedNpc.Configuration.StaminaOffset = previousOverride.Configuration.StaminaOffset;
+                        patchedNpc.Configuration.DispositionBase = previousOverride.Configuration.DispositionBase;
+                        // Copy Flags but we’ll override Female later
+                        patchedNpc.Configuration.Flags = previousOverride.Configuration.Flags;
+
+                        // Forward Keywords
+                        patchedNpc.Keywords = (previousOverride.Keywords ?? []).ToExtendedList();
+
+                        // Forward Inventory
+                        patchedNpc.Items?.Clear();
+                        if (previousOverride.Items != null)
+                            patchedNpc.Items?.AddRange(previousOverride.Items.Select(i => i.DeepCopy()));
+
+                        // Forward AI Packages
+                        patchedNpc.Packages.Clear();
+                        patchedNpc.Packages.AddRange(previousOverride.Packages);
+
+                        // Forward Perks
+                        patchedNpc.Perks?.Clear();
+                        if (previousOverride.Perks != null)
+                            patchedNpc.Perks?.AddRange(previousOverride.Perks.Select(p => p.DeepCopy()));
+
+                        // Forward Factions
+                        patchedNpc.Factions.Clear();
+                        if (previousOverride.Factions != null)
+                            patchedNpc.Factions.AddRange(previousOverride.Factions.Select(f => f.DeepCopy()));
+                    }
+
                     INpcGetter? template = null;
                     bool facegenCopied = false;
 
@@ -303,7 +348,7 @@ namespace SkyFemPatcher.SkyFemPatcher
                         if (partsToCopy.Contains("FTST")) patchedNpc.HeadTexture.SetTo(template.HeadTexture);
                         if (partsToCopy.Contains("HCLF")) patchedNpc.HairColor.SetTo(template.HairColor);
 
-                        // Set Female flag
+                        // Set Female flag (overrides any forwarded flag)
                         patchedNpc.Configuration.Flags |= NpcConfiguration.Flag.Female;
 
                         // Swap voice type
