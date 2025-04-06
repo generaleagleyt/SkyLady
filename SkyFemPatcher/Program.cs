@@ -25,25 +25,49 @@ namespace SkyFemPatcher.SkyFemPatcher
             var racesPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyFem Patcher", "SkyFem races.txt");
             var partsToCopyPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyFem Patcher", "SkyFem partsToCopy.txt");
             var blacklistPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyFem Patcher", "SkyFem blacklist.txt");
+            var targetModsPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyFem Patcher", "SkyFem target mods.txt");
             var humanoidRaces = new HashSet<string>(File.ReadAllLines(racesPath).Select(line => line.Trim()));
             var partsToCopy = File.ReadAllLines(partsToCopyPath).ToHashSet();
             HashSet<string> blacklistedMods = File.Exists(blacklistPath) ? [.. File.ReadAllLines(blacklistPath).Select(line => line.Trim())] : [];
-            // Add known problematic mods to the blacklist by default
-            blacklistedMods.Add("Harem - Volume 3.esp");
-            blacklistedMods.Add("SexyBanditCaptives.esp");
-            blacklistedMods.Add("Harem 2 AIO Armored.esp");
-            blacklistedMods.Add("Damsels The Caged Rose.esp");
-            blacklistedMods.Add("WindhelmSSE.esp");
-            blacklistedMods.Add("Deviously Cursed Loot.esp");
-            blacklistedMods.Add("Skyrim.esm");
-            blacklistedMods.Add("[AMI] COCO Succubus.esp");
             var femaleTemplatesByRace = new Dictionary<string, List<INpcGetter>>();
             var successfulTemplatesByRace = new Dictionary<string, List<INpcGetter>>();
             var skippedTemplates = new Dictionary<string, (string ModName, string Reason)>();
             var random = new Random();
-            var requiemKey = ModKey.FromNameAndExtension("BBLuxurySuite.esm");
 
-            // Race compatibility mapping (e.g., NordRace and NordRaceVampire are compatible)
+            // Load target mods from txt file
+            HashSet<ModKey> requiemKeys = new HashSet<ModKey>();
+            bool patchEntireLoadOrder = true;
+            if (File.Exists(targetModsPath))
+            {
+                var targetMods = File.ReadAllLines(targetModsPath)
+                    .Select(line => line.Trim())
+                    .Where(line => !string.IsNullOrEmpty(line))
+                    .Select(modName => ModKey.FromNameAndExtension(modName))
+                    .ToList();
+                if (targetMods.Any())
+                {
+                    requiemKeys.UnionWith(targetMods);
+                    patchEntireLoadOrder = false;
+                    Console.WriteLine("Patching specific mods from SkyFem target mods.txt:");
+                    foreach (var mod in requiemKeys) Console.WriteLine($"  {mod.FileName}");
+                }
+                else
+                {
+                    Console.WriteLine("SkyFem target mods.txt is empty - patching entire load order.");
+                }
+            }
+            else
+            {
+                Console.WriteLine("SkyFem target mods.txt not found - patching entire load order.");
+            }
+
+            // Cache all NPC overrides
+            Console.WriteLine("Building NPC override cache...");
+            var overrideCache = state.LoadOrder.PriorityOrder.Npc()
+                .WinningOverrides()
+                .ToDictionary(n => n.FormKey, n => n);
+
+            // Race compatibility mapping
             var raceCompatibilityMap = new Dictionary<string, List<string>>
             {
                 { "NordRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace" } },
@@ -77,7 +101,7 @@ namespace SkyFemPatcher.SkyFemPatcher
                 { "DA13AfflictedRace", new List<string> { "DA13AfflictedRace" } }
             };
 
-            // Voice type mapping (male to female)
+            // Voice type mapping
             var voiceTypeMap = new Dictionary<string, string>
             {
                 { "MaleArgonian", "FemaleArgonian" },
@@ -106,13 +130,12 @@ namespace SkyFemPatcher.SkyFemPatcher
                 { "MaleUniqueGhost", "FemaleUniqueGhost" },
                 { "MaleWarlock", "FemaleCondescending" },
                 { "MaleYoungEager", "FemaleYoungEager" },
-                // DLC voices
                 { "DLC1MaleVampire", "DLC1FemaleVampire" },
                 { "DLC2MaleDarkElfCommoner", "DLC2FemaleDarkElfCommoner" },
                 { "DLC2MaleDarkElfCynical", "FemaleDarkElf" }
             };
 
-            // Race to fallback voice list (preferred voice first)
+            // Race to fallback voice list
             var raceVoiceFallbacks = new Dictionary<string, List<string>>
             {
                 { "NordRace", new List<string> { "FemaleNord", "FemaleEvenToned", "FemaleCommander" } },
@@ -150,7 +173,7 @@ namespace SkyFemPatcher.SkyFemPatcher
                         femaleTemplatesByRace[race] = femaleTemplatesByRace.GetValueOrDefault(race, []);
                         femaleTemplatesByRace[race].Add(npc);
                     }
-                    else if (npc.FormKey.ModKey == requiemKey)
+                    else if (patchEntireLoadOrder || requiemKeys.Contains(npc.FormKey.ModKey))
                     {
                         maleNpcCount++;
                         Console.WriteLine($"Found male NPC: {npc.EditorID ?? "Unnamed"} ({npc.FormKey.IDString()}) (Race: {race})");
@@ -158,40 +181,62 @@ namespace SkyFemPatcher.SkyFemPatcher
                 }
             }
             Console.WriteLine($"Collected templates for {femaleTemplatesByRace.Count} races.");
-            Console.WriteLine($"Total male humanoid NPCs in {requiemKey.FileName}: {maleNpcCount}");
+            Console.WriteLine($"Total male humanoid NPCs in {(patchEntireLoadOrder ? "entire load order" : "target mods")}: {maleNpcCount}");
 
             foreach (var race in femaleTemplatesByRace.Keys.OrderBy(r => r))
             {
                 Console.WriteLine($"Found {femaleTemplatesByRace[race].Count} female templates for race {race}");
             }
 
-            // Patch male NPCs from BBLuxurySuite.esm
+            // Patch male NPCs from target mods or entire load order
             foreach (var npc in state.LoadOrder.PriorityOrder.Npc().WinningOverrides())
             {
                 var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
                 if (race == null || !humanoidRaces.Contains(race) ||
-                    npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female) || npc.FormKey.ModKey != requiemKey)
+                    npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female) ||
+                    (!patchEntireLoadOrder && !requiemKeys.Contains(npc.FormKey.ModKey)))
                     continue;
 
                 var npcFid = npc.FormKey.IDString();
                 var compatibleRaces = raceCompatibilityMap.TryGetValue(race, out var races) ? races : [race];
                 var templates = compatibleRaces
                     .SelectMany(r => femaleTemplatesByRace.TryGetValue(r, out var t) ? t : [])
+                    .Where(t =>
+                    {
+                        bool isSkyrimEsm = t.FormKey.ModKey.FileName.Equals("Skyrim.esm");
+                        bool isAfflicted = race == "DA13AfflictedRace";
+                        bool notBlacklisted = !blacklistedMods.Contains(t.FormKey.ModKey.FileName);
+                        bool nifExists = File.Exists(Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", t.FormKey.ModKey.FileName, $"00{t.FormKey.IDString()}.nif"));
+                        bool ddsExists = File.Exists(Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", t.FormKey.ModKey.FileName, $"00{t.FormKey.IDString()}.dds"));
+                        bool condition = (isAfflicted && isSkyrimEsm) || (notBlacklisted && (nifExists && ddsExists));
+                        if (isAfflicted && isSkyrimEsm)
+                        {
+                            Console.WriteLine($"Checking template {t.EditorID ?? "Unnamed"} ({t.FormKey}): notBlacklisted={notBlacklisted}, nifExists={nifExists}, ddsExists={ddsExists}, passes={condition}");
+                        }
+                        return condition;
+                    })
                     .ToList();
+
                 if (templates.Count > 0)
                 {
+                    var validTemplates = templates.ToList();
+                    if (validTemplates.Count > 1)
+                    {
+                        // Shuffle for full randomness
+                        for (int i = validTemplates.Count - 1; i > 0; i--)
+                        {
+                            int j = random.Next(i + 1);
+                            var temp = validTemplates[i];
+                            validTemplates[i] = validTemplates[j];
+                            validTemplates[j] = temp;
+                        }
+                    }
+
                     var patchedNpc = state.PatchMod.Npcs.GetOrAddAsOverride(npc);
 
-                    // NEW: Forward non-facegen data from the previous override
-                    var previousOverride = state.LoadOrder.PriorityOrder.Npc()
-                        .WinningOverrides()
-                        .Where(n => n.FormKey == npc.FormKey && !n.Equals(patchedNpc)) // Exclude our patch
-                        .LastOrDefault(); // Get the last override before ours
+                    var previousOverride = overrideCache.TryGetValue(npc.FormKey, out var cached) && !cached.Equals(patchedNpc) ? cached : null;
                     if (previousOverride != null)
                     {
-                        // Uncomment below if you want forwarding messages in the output
-                        // Console.WriteLine($"Forwarding non-facegen data for {npc.EditorID ?? "Unnamed"} from {previousOverride.FormKey.ModKey}");
-                        // Forward stats (ACBS block, excluding Female flag which we’ll set ourselves)
                         patchedNpc.Configuration.Level = previousOverride.Configuration.Level.DeepCopy();
                         patchedNpc.Configuration.CalcMinLevel = previousOverride.Configuration.CalcMinLevel;
                         patchedNpc.Configuration.CalcMaxLevel = previousOverride.Configuration.CalcMaxLevel;
@@ -199,27 +244,21 @@ namespace SkyFemPatcher.SkyFemPatcher
                         patchedNpc.Configuration.MagickaOffset = previousOverride.Configuration.MagickaOffset;
                         patchedNpc.Configuration.StaminaOffset = previousOverride.Configuration.StaminaOffset;
                         patchedNpc.Configuration.DispositionBase = previousOverride.Configuration.DispositionBase;
-                        // Copy Flags but we’ll override Female later
                         patchedNpc.Configuration.Flags = previousOverride.Configuration.Flags;
 
-                        // Forward Keywords
                         patchedNpc.Keywords = (previousOverride.Keywords ?? []).ToExtendedList();
 
-                        // Forward Inventory
                         patchedNpc.Items?.Clear();
                         if (previousOverride.Items != null)
                             patchedNpc.Items?.AddRange(previousOverride.Items.Select(i => i.DeepCopy()));
 
-                        // Forward AI Packages
                         patchedNpc.Packages.Clear();
                         patchedNpc.Packages.AddRange(previousOverride.Packages);
 
-                        // Forward Perks
                         patchedNpc.Perks?.Clear();
                         if (previousOverride.Perks != null)
                             patchedNpc.Perks?.AddRange(previousOverride.Perks.Select(p => p.DeepCopy()));
 
-                        // Forward Factions
                         patchedNpc.Factions.Clear();
                         if (previousOverride.Factions != null)
                             patchedNpc.Factions.AddRange(previousOverride.Factions.Select(f => f.DeepCopy()));
@@ -228,8 +267,7 @@ namespace SkyFemPatcher.SkyFemPatcher
                     INpcGetter? template = null;
                     bool facegenCopied = false;
 
-                    // Try all templates randomly
-                    foreach (var candidate in templates.OrderBy(x => random.Next()))
+                    foreach (var candidate in validTemplates)
                     {
                         template = candidate;
                         var templateFid = template.FormKey.IDString();
@@ -237,25 +275,6 @@ namespace SkyFemPatcher.SkyFemPatcher
                         var templateNifPath = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", templateFileName, $"00{templateFid}.nif");
                         var templateDdsPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", templateFileName, $"00{templateFid}.dds");
 
-                        // Skip templates from blacklisted mods
-                        if (blacklistedMods.Contains(templateFileName))
-                        {
-                            Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({templateFid}) from blacklisted mod {templateFileName} for NPC {npc.EditorID ?? "Unnamed"} - mod contains problematic facegen files. To manage blacklisted mods, edit 'SkyFem blacklist.txt' in the SkyFem Patcher mod folder.");
-                            skippedTemplates[template.EditorID ?? "Unnamed"] = (templateFileName, "Mod is blacklisted");
-                            continue;
-                        }
-
-                        // Check if the mod has meshes or textures folders
-                        var modMeshesPath = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", templateFileName);
-                        var modTexturesPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", templateFileName);
-                        if (!Directory.Exists(modMeshesPath) && !Directory.Exists(modTexturesPath))
-                        {
-                            Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({templateFid}) from {templateFileName} for NPC {npc.EditorID ?? "Unnamed"} - mod does not contain meshes or textures folders, likely missing facegen files.");
-                            skippedTemplates[template.EditorID ?? "Unnamed"] = (templateFileName, "Mod lacks meshes or textures folders");
-                            continue;
-                        }
-
-                        // Check for .bsa archives
                         var bsaPath = Path.Combine(state.DataFolderPath, templateFileName.Replace(".esm", ".bsa").Replace(".esp", ".bsa"));
                         if (File.Exists(bsaPath))
                         {
@@ -264,81 +283,6 @@ namespace SkyFemPatcher.SkyFemPatcher
                             continue;
                         }
 
-                        // Validate template facegen files
-                        if (!File.Exists(templateNifPath) || new FileInfo(templateNifPath).Length == 0)
-                        {
-                            Console.WriteLine($"Invalid .nif for template {template.EditorID ?? "Unnamed"} ({templateFid}) at {templateNifPath} - skipping.");
-                            skippedTemplates[template.EditorID ?? "Unnamed"] = (templateFileName, "Invalid .nif file (missing or empty)");
-                            continue;
-                        }
-                        if (!File.Exists(templateDdsPath) || new FileInfo(templateDdsPath).Length == 0)
-                        {
-                            Console.WriteLine($"Invalid .dds for template {template.EditorID ?? "Unnamed"} ({templateFid}) at {templateDdsPath} - skipping.");
-                            skippedTemplates[template.EditorID ?? "Unnamed"] = (templateFileName, "Invalid .dds file (missing or empty)");
-                            continue;
-                        }
-
-                        // Check for male texture references and missing textures in the .nif file
-                        try
-                        {
-                            var nifContent = File.ReadAllText(templateNifPath);
-                            // Extract active texture paths from BSShaderTextureSet blocks
-                            var texturePaths = new List<string>();
-                            var lines = nifContent.Split(LineSeparators, StringSplitOptions.RemoveEmptyEntries);
-                            bool inTextureSet = false;
-                            foreach (var line in lines)
-                            {
-                                if (line.Contains("BSShaderTextureSet"))
-                                {
-                                    inTextureSet = true;
-                                    continue;
-                                }
-                                if (inTextureSet && line.Contains("textures\\"))
-                                {
-                                    var pathStart = line.IndexOf("textures\\");
-                                    var pathEnd = line.IndexOf(".dds") + 4;
-                                    if (pathStart >= 0 && pathEnd > pathStart)
-                                    {
-                                        string texturePath = line[pathStart..pathEnd];
-                                        texturePaths.Add(texturePath);
-                                    }
-                                }
-                                if (inTextureSet && line.Contains('}'))
-                                {
-                                    inTextureSet = false;
-                                }
-                            }
-
-                            // Check if any active texture path references male textures (excluding BlankDetailmap.dds and KhajiitMouth textures)
-                            if (texturePaths.Any(path => path.Contains(@"textures\actors\character\male\", StringComparison.OrdinalIgnoreCase) &&
-                                !path.Contains(@"textures\actors\character\male\blankdetailmap.dds", StringComparison.OrdinalIgnoreCase) &&
-                                !(path.Contains(@"textures\actors\character\khajiitmale\", StringComparison.OrdinalIgnoreCase) && path.Contains("khajiitmouth", StringComparison.OrdinalIgnoreCase))))
-                            {
-                                Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({templateFid}) from {templateFileName} for NPC {npc.EditorID ?? "Unnamed"} - .nif file references male textures, which may cause rendering issues. Consider adding '{templateFileName}' to SkyFem blacklist.txt.");
-                                skippedTemplates[template.EditorID ?? "Unnamed"] = (templateFileName, "Male texture references detected");
-                                continue;
-                            }
-
-                            // Check if each texture exists
-                            foreach (var texturePath in texturePaths)
-                            {
-                                var fullTexturePath = Path.Combine(state.DataFolderPath, texturePath.Replace('/', '\\'));
-                                if (!File.Exists(fullTexturePath))
-                                {
-                                    Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({templateFid}) from {templateFileName} for NPC {npc.EditorID ?? "Unnamed"} - .nif file references missing texture: {texturePath}. Consider adding '{templateFileName}' to SkyFem blacklist.txt.");
-                                    skippedTemplates[template.EditorID ?? "Unnamed"] = (templateFileName, $"Missing texture: {texturePath}");
-                                    continue;
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Failed to read .nif file for template {template.EditorID ?? "Unnamed"} ({templateFid}) at {templateNifPath} - skipping due to error: {ex.Message}");
-                            skippedTemplates[template.EditorID ?? "Unnamed"] = (templateFileName, $"Failed to read .nif file: {ex.Message}");
-                            continue;
-                        }
-
-                        // Copy specific fields from partsToCopy
                         if (partsToCopy.Contains("PNAM")) patchedNpc.HeadParts.SetTo(template.HeadParts);
                         if (partsToCopy.Contains("WNAM")) patchedNpc.WornArmor.SetTo(template.WornArmor);
                         if (partsToCopy.Contains("QNAM")) patchedNpc.TextureLighting = template.TextureLighting;
@@ -348,17 +292,14 @@ namespace SkyFemPatcher.SkyFemPatcher
                         if (partsToCopy.Contains("FTST")) patchedNpc.HeadTexture.SetTo(template.HeadTexture);
                         if (partsToCopy.Contains("HCLF")) patchedNpc.HairColor.SetTo(template.HairColor);
 
-                        // Set Female flag (overrides any forwarded flag)
                         patchedNpc.Configuration.Flags |= NpcConfiguration.Flag.Female;
 
-                        // Swap voice type
                         if (npc.Voice != null)
                         {
                             var voiceTypeGetter = npc.Voice.TryResolve(state.LinkCache);
                             var voiceType = voiceTypeGetter?.EditorID;
                             if (voiceType != null && voiceTypeMap.TryGetValue(voiceType, out var femaleVoiceType))
                             {
-                                // Direct mapping found
                                 var femaleVoice = state.LoadOrder.PriorityOrder.VoiceType().WinningOverrides()
                                     .FirstOrDefault(vt => vt.EditorID == femaleVoiceType);
                                 if (femaleVoice != null)
@@ -369,7 +310,6 @@ namespace SkyFemPatcher.SkyFemPatcher
                             }
                             else if (voiceType != null && raceVoiceFallbacks.TryGetValue(race, out var fallbackVoices) && fallbackVoices.Count > 0)
                             {
-                                // No mapping found, pick a random fallback voice for the race
                                 var selectedVoiceType = fallbackVoices[random.Next(fallbackVoices.Count)];
                                 var fallbackVoice = state.LoadOrder.PriorityOrder.VoiceType().WinningOverrides()
                                     .FirstOrDefault(vt => vt.EditorID == selectedVoiceType);
@@ -389,14 +329,12 @@ namespace SkyFemPatcher.SkyFemPatcher
                             }
                         }
 
-                        // Set height and weight (female norms or from template)
-                        patchedNpc.Height = template.Height != 0.0f ? template.Height : 1.0f; // Default female height
-                        patchedNpc.Weight = template.Weight != 0.0f ? template.Weight : 50.0f; // Default female weight
+                        patchedNpc.Height = template.Height != 0.0f ? template.Height : 1.0f;
+                        patchedNpc.Weight = template.Weight != 0.0f ? template.Weight : 50.0f;
 
-                        // Copy facegen files
                         var outputModFolder = "G:\\LoreRim\\mods\\SkyFem Patcher";
-                        var patchedNifPath = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", state.PatchMod.ModKey.FileName, $"00{npcFid}.nif");
-                        var patchedDdsPath = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", state.PatchMod.ModKey.FileName, $"00{npcFid}.dds");
+                        var patchedNifPath = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", npc.FormKey.ModKey.FileName, $"00{npcFid}.nif");
+                        var patchedDdsPath = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", npc.FormKey.ModKey.FileName, $"00{npcFid}.dds");
 
                         Console.WriteLine($"Checking facegen - Geom Src: {templateNifPath}, Exists: {File.Exists(templateNifPath)}");
                         Console.WriteLine($"Checking facegen - Tint Src: {templateDdsPath}, Exists: {File.Exists(templateDdsPath)}");
@@ -444,7 +382,6 @@ namespace SkyFemPatcher.SkyFemPatcher
                         }
                     }
 
-                    // Fallback if all templates fail
                     if (!facegenCopied)
                     {
                         if (successfulTemplatesByRace.TryGetValue(race, out var successfulTemplates) && successfulTemplates.Count > 0)
@@ -453,8 +390,8 @@ namespace SkyFemPatcher.SkyFemPatcher
                             var fallbackNifPath = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", template.FormKey.ModKey.FileName, $"00{template.FormKey.IDString()}.nif");
                             var fallbackDdsPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", template.FormKey.ModKey.FileName, $"00{template.FormKey.IDString()}.dds");
                             var outputModFolder = "G:\\LoreRim\\mods\\SkyFem Patcher";
-                            var patchedNifPath = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", state.PatchMod.ModKey.FileName, $"00{npcFid}.nif");
-                            var patchedDdsPath = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", state.PatchMod.ModKey.FileName, $"00{npcFid}.dds");
+                            var patchedNifPath = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", npc.FormKey.ModKey.FileName, $"00{npcFid}.nif");
+                            var patchedDdsPath = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", npc.FormKey.ModKey.FileName, $"00{npcFid}.dds");
                             var nifDir = Path.GetDirectoryName(patchedNifPath) ?? throw new InvalidOperationException("NIF path directory is null");
                             var ddsDir = Path.GetDirectoryName(patchedDdsPath) ?? throw new InvalidOperationException("DDS path directory is null");
 
@@ -469,7 +406,6 @@ namespace SkyFemPatcher.SkyFemPatcher
                         }
                         else
                         {
-                            // No successful templates available for this race; skip patching entirely
                             Console.WriteLine($"Failed to patch {npc.EditorID ?? "Unnamed"} ({npcFid}) - no valid templates or successful fallbacks available for race {race}. NPC will remain unchanged.");
                             continue;
                         }
@@ -481,7 +417,6 @@ namespace SkyFemPatcher.SkyFemPatcher
                 }
             }
 
-            // Log a summary of skipped templates
             if (skippedTemplates.Count != 0)
             {
                 Console.WriteLine("\nSummary of Skipped Templates:");
