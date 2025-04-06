@@ -143,7 +143,7 @@ namespace SkyFemPatcher.SkyFemPatcher
             foreach (var npc in state.LoadOrder.PriorityOrder.Npc().WinningOverrides())
             {
                 var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
-                if (race != null && humanoidRaces.Contains(race) && race != "ManakinRace") // Skip ManakinRace
+                if (race != null && humanoidRaces.Contains(race))
                 {
                     if (npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female))
                     {
@@ -169,7 +169,7 @@ namespace SkyFemPatcher.SkyFemPatcher
             foreach (var npc in state.LoadOrder.PriorityOrder.Npc().WinningOverrides())
             {
                 var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
-                if (race == null || !humanoidRaces.Contains(race) || race == "ManakinRace" || // Skip ManakinRace
+                if (race == null || !humanoidRaces.Contains(race) ||
                     npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female) || npc.FormKey.ModKey != requiemKey)
                     continue;
 
