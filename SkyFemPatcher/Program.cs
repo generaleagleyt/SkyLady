@@ -4,12 +4,15 @@ using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
+using Mutagen.Bethesda.Plugins.Analysis.DI;
+using System.IO;
 
 namespace SkyFemPatcher.SkyFemPatcher
 {
     public class Program
     {
         private static readonly char[] LineSeparators = ['\n', '\r'];
+        private static readonly FormKey SkyFemPatched = FormKey.Factory("000800:SkyFemPatcherKeywords.esp");
 
         public static async Task<int> Main(string[] args)
         {
@@ -17,6 +20,34 @@ namespace SkyFemPatcher.SkyFemPatcher
                 .AddPatch<ISkyrimMod, ISkyrimModGetter>(Patch)
                 .SetTypicalOpen(GameRelease.SkyrimSE, "SkyFem Patcher.esp")
                 .Run(args);
+        }
+
+        // Helper method to perform batch file copying
+        private static void BatchCopyFiles(List<(string SourcePath, string DestPath)> fileCopyOperations)
+        {
+            if (fileCopyOperations.Count == 0) return;
+
+            // Extract unique destination directories
+            var directories = fileCopyOperations
+                .Select(op => Path.GetDirectoryName(op.DestPath))
+                .Distinct()
+                .ToList();
+
+            // Create all directories
+            foreach (var dir in directories)
+            {
+                if (dir != null)
+                {
+                    Directory.CreateDirectory(dir);
+                }
+            }
+
+            // Copy all files
+            foreach (var (sourcePath, destPath) in fileCopyOperations)
+            {
+                File.Copy(sourcePath, destPath, true);
+                Console.WriteLine($"Copied file to: {destPath}");
+            }
         }
 
         public static void Patch(IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
@@ -36,6 +67,9 @@ namespace SkyFemPatcher.SkyFemPatcher
             var filteredNpcs = new Dictionary<string, string>(); // Filtered NPCs (Player/Presets)
             var random = new Random();
 
+            // List to store file copy operations
+            var fileCopyOperations = new List<(string SourcePath, string DestPath)>();
+
             // Load target mods from txt file
             HashSet<ModKey> requiemKeys = [];
             bool patchEntireLoadOrder = true;
@@ -46,7 +80,7 @@ namespace SkyFemPatcher.SkyFemPatcher
                     .Where(line => !string.IsNullOrEmpty(line))
                     .Select(modName => ModKey.FromNameAndExtension(modName))
                     .ToList();
-                if (targetMods.Any())
+                if (targetMods.Count != 0)
                 {
                     requiemKeys.UnionWith(targetMods);
                     patchEntireLoadOrder = false;
@@ -62,6 +96,23 @@ namespace SkyFemPatcher.SkyFemPatcher
             {
                 Console.WriteLine("SkyFem target mods.txt not found - patching entire load order.");
             }
+
+            // Cache facegen file existence for NPCs with humanoid races only
+            Console.WriteLine("Caching facegen file existence...");
+            var facegenCache = new Dictionary<(string ModKey, string FormID), (bool NifExists, bool DdsExists)>();
+            foreach (var npc in state.LoadOrder.PriorityOrder.Npc().WinningOverrides())
+            {
+                var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
+                if (race != null && humanoidRaces.Contains(race))
+                {
+                    var modKey = npc.FormKey.ModKey.FileName.ToString();
+                    var formId = npc.FormKey.IDString();
+                    var nifPath = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", modKey, $"00{formId}.nif");
+                    var ddsPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", modKey, $"00{formId}.dds");
+                    facegenCache[(modKey, formId)] = (File.Exists(nifPath), File.Exists(ddsPath));
+                }
+            }
+            Console.WriteLine($"Cached facegen existence for {facegenCache.Count} NPCs.");
 
             // Cache all NPC overrides
             Console.WriteLine("Building NPC override cache...");
@@ -165,6 +216,7 @@ namespace SkyFemPatcher.SkyFemPatcher
             // Collect female templates and count male NPCs (excluding Player and presets)
             int maleNpcCount = 0;
             int successfulPatches = 0;
+            int processedNpcs = 0; // Counter for periodic batching
             foreach (var npc in state.LoadOrder.PriorityOrder.Npc().WinningOverrides())
             {
                 var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
@@ -172,12 +224,20 @@ namespace SkyFemPatcher.SkyFemPatcher
                 {
                     if (npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female))
                     {
-                        femaleTemplatesByRace[race] = femaleTemplatesByRace.GetValueOrDefault(race, []);
-                        femaleTemplatesByRace[race].Add(npc);
+                        // Pre-filter templates when building femaleTemplatesByRace
+                        bool isSkyrimEsm = npc.FormKey.ModKey.FileName.Equals("Skyrim.esm");
+                        bool isAfflicted = race == "DA13AfflictedRace";
+                        bool notBlacklisted = !blacklistedMods.Contains(npc.FormKey.ModKey.FileName);
+                        var (nifExists, ddsExists) = facegenCache[(npc.FormKey.ModKey.FileName.ToString(), npc.FormKey.IDString())];
+                        bool condition = (isAfflicted && isSkyrimEsm) || (notBlacklisted && (nifExists && ddsExists));
+                        if (condition)
+                        {
+                            femaleTemplatesByRace[race] = femaleTemplatesByRace.GetValueOrDefault(race, []);
+                            femaleTemplatesByRace[race].Add(npc);
+                        }
                     }
                     else if (patchEntireLoadOrder || requiemKeys.Contains(npc.FormKey.ModKey))
                     {
-                        // Exclude Player and presets from the count
                         if (npc.EditorID != null && (npc.EditorID.Equals("Player", StringComparison.OrdinalIgnoreCase) ||
                                                      npc.EditorID.Contains("preset", StringComparison.OrdinalIgnoreCase)))
                         {
@@ -202,15 +262,22 @@ namespace SkyFemPatcher.SkyFemPatcher
             {
                 var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
                 if (race == null || !humanoidRaces.Contains(race) ||
-                    npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female) ||
+                    npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female) || // Skip females
                     (!patchEntireLoadOrder && !requiemKeys.Contains(npc.FormKey.ModKey)) ||
                     (npc.EditorID != null && (npc.EditorID.Equals("Player", StringComparison.OrdinalIgnoreCase) ||
                                               npc.EditorID.Contains("preset", StringComparison.OrdinalIgnoreCase))))
                     continue;
 
+                // Check if NPC has already been patched
+                bool hasBeenPatched = npc.Keywords?.Any(k => k.FormKey == SkyFemPatched) ?? false;
+                if (hasBeenPatched)
+                {
+                    Console.WriteLine($"Skipped NPC: {npc.EditorID ?? "Unnamed"} ({npc.FormKey.IDString()}) - already patched by SkyFem");
+                    continue;
+                }
+
                 var npcFid = npc.FormKey.IDString();
 
-                // Debug log for Afflicted NPCs
                 if (race == "DA13AfflictedRace")
                 {
                     Console.WriteLine($"Processing Afflicted NPC: {npc.EditorID ?? "Unnamed"} ({npcFid})");
@@ -219,20 +286,6 @@ namespace SkyFemPatcher.SkyFemPatcher
                 var compatibleRaces = raceCompatibilityMap.TryGetValue(race, out var races) ? races : [race];
                 var templates = compatibleRaces
                     .SelectMany(r => femaleTemplatesByRace.TryGetValue(r, out var t) ? t : [])
-                    .Where(t =>
-                    {
-                        bool isSkyrimEsm = t.FormKey.ModKey.FileName.Equals("Skyrim.esm");
-                        bool isAfflicted = race == "DA13AfflictedRace";
-                        bool notBlacklisted = !blacklistedMods.Contains(t.FormKey.ModKey.FileName);
-                        bool nifExists = File.Exists(Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", t.FormKey.ModKey.FileName, $"00{t.FormKey.IDString()}.nif"));
-                        bool ddsExists = File.Exists(Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", t.FormKey.ModKey.FileName, $"00{t.FormKey.IDString()}.dds"));
-                        bool condition = (isAfflicted && isSkyrimEsm) || (notBlacklisted && (nifExists && ddsExists));
-                        if (isAfflicted && isSkyrimEsm)
-                        {
-                            Console.WriteLine($"Checking template {t.EditorID ?? "Unnamed"} ({t.FormKey}): notBlacklisted={notBlacklisted}, nifExists={nifExists}, ddsExists={ddsExists}, passes={condition}");
-                        }
-                        return condition;
-                    })
                     .ToList();
 
                 if (templates.Count > 0)
@@ -240,7 +293,6 @@ namespace SkyFemPatcher.SkyFemPatcher
                     var validTemplates = templates.ToList();
                     if (validTemplates.Count > 1)
                     {
-                        // Shuffle for full randomness
                         for (int i = validTemplates.Count - 1; i > 0; i--)
                         {
                             int j = random.Next(i + 1);
@@ -354,8 +406,8 @@ namespace SkyFemPatcher.SkyFemPatcher
                         var patchedNifPath = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", npc.FormKey.ModKey.FileName, $"00{npcFid}.nif");
                         var patchedDdsPath = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", npc.FormKey.ModKey.FileName, $"00{npcFid}.dds");
 
-                        Console.WriteLine($"Checking facegen - Geom Src: {templateNifPath}, Exists: {File.Exists(templateNifPath)}");
-                        Console.WriteLine($"Checking facegen - Tint Src: {templateDdsPath}, Exists: {File.Exists(templateDdsPath)}");
+                        Console.WriteLine($"Checking facegen - Geom Src: {templateNifPath}, Exists: {facegenCache[(templateFileName, templateFid)].NifExists}");
+                        Console.WriteLine($"Checking facegen - Tint Src: {templateDdsPath}, Exists: {facegenCache[(templateFileName, templateFid)].DdsExists}");
 
                         bool nifCopied = false, ddsCopied = false;
                         var nifDir = Path.GetDirectoryName(patchedNifPath) ?? throw new InvalidOperationException("NIF path directory is null");
@@ -372,11 +424,9 @@ namespace SkyFemPatcher.SkyFemPatcher
                         }
                         else
                         {
-                            if (File.Exists(templateNifPath))
+                            if (facegenCache[(templateFileName, templateFid)].NifExists)
                             {
-                                Directory.CreateDirectory(nifDir);
-                                File.Copy(templateNifPath, patchedNifPath, true);
-                                Console.WriteLine($"Copied facegen .nif to: {patchedNifPath}");
+                                fileCopyOperations.Add((templateNifPath, patchedNifPath));
                                 nifCopied = true;
                             }
                             else
@@ -384,11 +434,9 @@ namespace SkyFemPatcher.SkyFemPatcher
                                 Console.WriteLine($"Warning: No facegen .nif found for template {template.EditorID ?? "Unnamed"} ({templateFid}) at {templateNifPath}");
                             }
 
-                            if (File.Exists(templateDdsPath))
+                            if (facegenCache[(templateFileName, templateFid)].DdsExists)
                             {
-                                Directory.CreateDirectory(ddsDir);
-                                File.Copy(templateDdsPath, patchedDdsPath, true);
-                                Console.WriteLine($"Copied facegen .dds to: {patchedDdsPath}");
+                                fileCopyOperations.Add((templateDdsPath, patchedDdsPath));
                                 ddsCopied = true;
                             }
                             else
@@ -407,7 +455,21 @@ namespace SkyFemPatcher.SkyFemPatcher
                                 successfulTemplatesByRace[race] = templateList;
                             }
                             templateList.Add(template);
+
+                            // Add SkyFemPatched keyword
+                            patchedNpc.Keywords ??= [];
+                            patchedNpc.Keywords.Add(SkyFemPatched);
+
                             Console.WriteLine($"Patched Male NPC: {npc.EditorID ?? "Unnamed"} with {template.EditorID ?? "Unnamed"} (Race: {race})");
+
+                            // Periodic batching: Copy files every 1,000 operations (500 NPCs)
+                            processedNpcs++;
+                            if (fileCopyOperations.Count >= 1000) // 1,000 operations = 500 NPCs (2 files per NPC)
+                            {
+                                Console.WriteLine($"Performing batch file copy for {fileCopyOperations.Count} files...");
+                                BatchCopyFiles(fileCopyOperations);
+                                fileCopyOperations.Clear();
+                            }
                             break;
                         }
                     }
@@ -425,14 +487,24 @@ namespace SkyFemPatcher.SkyFemPatcher
                             var nifDir = Path.GetDirectoryName(patchedNifPath) ?? throw new InvalidOperationException("NIF path directory is null");
                             var ddsDir = Path.GetDirectoryName(patchedDdsPath) ?? throw new InvalidOperationException("DDS path directory is null");
 
-                            Directory.CreateDirectory(nifDir);
-                            Directory.CreateDirectory(ddsDir);
-                            File.Copy(fallbackNifPath, patchedNifPath, true);
-                            File.Copy(fallbackDdsPath, patchedDdsPath, true);
-                            Console.WriteLine($"Used fallback facegen .nif from successful template: {patchedNifPath}");
-                            Console.WriteLine($"Used fallback facegen .dds from successful template: {patchedDdsPath}");
+                            fileCopyOperations.Add((fallbackNifPath, patchedNifPath));
+                            fileCopyOperations.Add((fallbackDdsPath, patchedDdsPath));
                             successfulPatches++;
+
+                            // Add SkyFemPatched keyword
+                            patchedNpc.Keywords ??= [];
+                            patchedNpc.Keywords.Add(SkyFemPatched);
+
                             Console.WriteLine($"Patched Male NPC: {npc.EditorID ?? "Unnamed"} with Fallback Template {template.EditorID ?? "Unnamed"} (Race: {race})");
+
+                            // Periodic batching: Copy files every 1,000 operations (500 NPCs)
+                            processedNpcs++;
+                            if (fileCopyOperations.Count >= 1000) // 1,000 operations = 500 NPCs (2 files per NPC)
+                            {
+                                Console.WriteLine($"Performing batch file copy for {fileCopyOperations.Count} files...");
+                                BatchCopyFiles(fileCopyOperations);
+                                fileCopyOperations.Clear();
+                            }
                         }
                         else
                         {
@@ -449,11 +521,21 @@ namespace SkyFemPatcher.SkyFemPatcher
                 }
             }
 
+            // Perform final batch copy for any remaining files
+            if (fileCopyOperations.Count > 0)
+            {
+                Console.WriteLine($"Performing final batch file copy for {fileCopyOperations.Count} files...");
+                BatchCopyFiles(fileCopyOperations);
+                fileCopyOperations.Clear();
+            }
+
             if (skippedTemplates.Count != 0)
             {
                 Console.WriteLine("\nSummary of Skipped Templates:");
-                foreach (var (templateId, (modName, reason)) in skippedTemplates)
+                foreach (KeyValuePair<string, (string ModName, string Reason)> entry in skippedTemplates)
                 {
+                    string templateId = entry.Key;
+                    (string modName, string reason) = entry.Value;
                     Console.WriteLine($"- Template: {templateId}, Mod: {modName}, Reason: {reason}");
                 }
                 Console.WriteLine("If you encounter issues with these templates, consider adding the listed mods to 'SkyFem blacklist.txt' in the SkyFem Patcher mod folder.");
@@ -462,8 +544,10 @@ namespace SkyFemPatcher.SkyFemPatcher
             if (filteredNpcs.Count != 0)
             {
                 Console.WriteLine("\nFiltered NPCs (Excluded from Patching):");
-                foreach (var (npcId, reason) in filteredNpcs)
+                foreach (KeyValuePair<string, string> entry in filteredNpcs)
                 {
+                    string npcId = entry.Key;
+                    string reason = entry.Value;
                     Console.WriteLine($"- NPC: {npcId}, Reason: {reason}");
                 }
             }
@@ -478,6 +562,19 @@ namespace SkyFemPatcher.SkyFemPatcher
             }
 
             Console.WriteLine($"Successfully patched {successfulPatches} out of {maleNpcCount} male NPCs with facegen.");
+
+            var splitter = new MultiModFileSplitter();
+            var splitMods = splitter.Split<ISkyrimMod, ISkyrimModGetter>(state.PatchMod, 250).ToList();
+            Console.WriteLine($"Split into {splitMods.Count} mods:");
+            for (int i = 0; i < splitMods.Count; i++)
+            {
+                var mod = splitMods[i];
+                var masterCount = mod.MasterReferences.Count;
+                var recordCount = mod.EnumerateMajorRecords().Count();
+                Console.WriteLine($"Mod {i}: {mod.ModKey.FileName}, Masters: {masterCount}, Records: {recordCount}");
+                mod.WriteToBinary(Path.Combine(state.DataFolderPath, mod.ModKey.FileName));
+            }
+            throw new Exception("Testing split mods - check the split files in Data folder");
         }
     }
 }
