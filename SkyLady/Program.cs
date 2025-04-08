@@ -33,6 +33,26 @@ namespace SkyLady.SkyLady
         [SynthesisTooltip("Select the NPCs to patch. Leave empty to patch all NPCs in the load order.")]
         public List<SkyLadyNpc> NpcsToPatch { get; set; } = [];
 
+        [SynthesisSettingName("Random Seed (Optional)")]
+        [SynthesisTooltip("Enter a number to make template randomization consistent. Leave empty for true randomness each run.")]
+        public string RandomSeed { get; set; } = "";
+
+        [SynthesisSettingName("Template Mod Blacklist")]
+        [SynthesisTooltip("Mods to exclude from template collection (e.g., mods with vanilla looks or .nif issues).")]
+        public HashSet<ModKey> TemplateModBlacklist { get; set; } = [];
+
+        [SynthesisSettingName("Target Mods to Patch")]
+        [SynthesisTooltip("Select the mods to patch. Leave empty to patch the entire load order.")]
+        public HashSet<ModKey> TargetModsToPatch { get; set; } = [];
+
+        [SynthesisSettingName("Mods to Exclude from Patching")]
+        [SynthesisTooltip("Select mods to exclude from patching (e.g., mods with unique NPCs you want to preserve).")]
+        public HashSet<ModKey> ModsToExcludeFromPatching { get; set; } = [];
+
+        [SynthesisSettingName("NPCs to Exclude from Patching")]
+        [SynthesisTooltip("Select individual NPCs to exclude from patching (e.g., unique NPCs you want to preserve).")]
+        public List<IFormLinkGetter<INpcGetter>> NpcsToExcludeFromPatching { get; set; } = [];
+
         // Deprecated: Kept for backward compatibility, but hidden from GUI
         [SynthesisIgnoreSetting]
         public string SingleNpcBaseId { get; set; } = "";
@@ -115,46 +135,35 @@ namespace SkyLady.SkyLady
             Console.WriteLine("SkyLady (Side) running on .NET 8.0...");
             var racesPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyLady", "SkyLady races.txt");
             var partsToCopyPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyLady", "SkyLady partsToCopy.txt");
-            var blacklistPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyLady", "SkyLady blacklist.txt");
-            var targetModsPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyLady", "SkyLady target mods.txt");
             var humanoidRaces = new HashSet<string>(File.ReadAllLines(racesPath).Select(line => line.Trim()));
             var partsToCopy = File.ReadAllLines(partsToCopyPath).ToHashSet();
-            HashSet<string> blacklistedMods = File.Exists(blacklistPath) ? [.. File.ReadAllLines(blacklistPath).Select(line => line.Trim())] : [];
+            HashSet<string> blacklistedMods = [.. settings.TemplateModBlacklist.Select(modKey => modKey.FileName.String)];
             var femaleTemplatesByRace = new Dictionary<string, List<INpcGetter>>();
             var successfulTemplatesByRace = new Dictionary<string, List<INpcGetter>>();
             var skippedTemplates = new Dictionary<string, (string ModName, string Reason)>();
             var unpatchedNpcs = new Dictionary<string, string>(); // NPC ID -> Reason
             var filteredNpcs = new Dictionary<string, string>(); // Filtered NPCs (Player/Presets)
-            var random = new Random();
+            var random = int.TryParse(settings.RandomSeed, out int seed) ? new Random(seed) : new Random();
+            Console.WriteLine($"Using random seed: {(settings.RandomSeed.Length > 0 ? settings.RandomSeed : "None (true randomness)")}");
 
             // List to store file copy operations
             var fileCopyOperations = new List<(string SourcePath, string DestPath)>();
 
-            // Load target mods from txt file
-            HashSet<ModKey> requiemKeys = [];
+            // Load target mods from settings
+            HashSet<ModKey> requiemKeys = settings.TargetModsToPatch;
             bool patchEntireLoadOrder = true;
-            if (File.Exists(targetModsPath))
+            if (requiemKeys.Any())
             {
-                var targetMods = File.ReadAllLines(targetModsPath)
-                    .Select(line => line.Trim())
-                    .Where(line => !string.IsNullOrEmpty(line))
-                    .Select(modName => ModKey.FromNameAndExtension(modName))
-                    .ToList();
-                if (targetMods.Count != 0)
+                patchEntireLoadOrder = false;
+                Console.WriteLine("Patching specific mods from settings:");
+                foreach (var mod in requiemKeys)
                 {
-                    requiemKeys.UnionWith(targetMods);
-                    patchEntireLoadOrder = false;
-                    Console.WriteLine("Patching specific mods from SkyLady target mods.txt:");
-                    foreach (var mod in requiemKeys) Console.WriteLine($"  {mod.FileName}");
-                }
-                else
-                {
-                    Console.WriteLine("SkyLady target mods.txt is empty - patching entire load order.");
+                    Console.WriteLine($"  {mod.FileName}");
                 }
             }
             else
             {
-                Console.WriteLine("SkyLady target mods.txt not found - patching entire load order.");
+                Console.WriteLine("No target mods specified in settings - patching entire load order.");
             }
 
             // Cache facegen file existence for NPCs with humanoid races only
@@ -429,10 +438,11 @@ namespace SkyLady.SkyLady
                             var templateDdsPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", templateFileName, $"00{templateFid}.dds");
 
                             var bsaPath = Path.Combine(state.DataFolderPath, templateFileName.Replace(".esm", ".bsa").Replace(".esp", ".bsa"));
-                            if (File.Exists(bsaPath))
+                            var templateRace = template.Race.TryResolve(state.LinkCache)?.EditorID;
+                            if (File.Exists(bsaPath) || (blacklistedMods.Contains(templateFileName) && !(templateFileName.Equals("Skyrim.esm") && templateRace == "DA13AfflictedRace")))
                             {
-                                Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({templateFid}) from {templateFileName} for NPC {npc.EditorID ?? "Unnamed"} - mod uses a .bsa archive, which the patcher cannot access.");
-                                skippedTemplates[template.EditorID ?? "Unnamed"] = (templateFileName, "Mod uses a .bsa archive");
+                                Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({templateFid}) from {templateFileName} for NPC {npc.EditorID ?? "Unnamed"} - {(File.Exists(bsaPath) ? "mod uses a .bsa archive" : "mod is blacklisted")} and cannot be used as a template.");
+                                skippedTemplates[template.EditorID ?? "Unnamed"] = (templateFileName, File.Exists(bsaPath) ? "Mod uses a .bsa archive" : "Mod is blacklisted");
                                 continue;
                             }
 
@@ -511,14 +521,14 @@ namespace SkyLady.SkyLady
                             var nifDir = Path.GetDirectoryName(patchedNifPath) ?? throw new InvalidOperationException("NIF path directory is null");
                             var ddsDir = Path.GetDirectoryName(patchedDdsPath) ?? throw new InvalidOperationException("DDS path directory is null");
 
-                            if (templateFileName.Equals("Skyrim.esm") && race == "DA13AfflictedRace")
+                            if (templateFileName.Equals("Skyrim.esm") && templateRace == "DA13AfflictedRace")
                             {
                                 Console.WriteLine($"Bypass triggered for template {template.EditorID ?? "Unnamed"} ({templateFid}) for NPC {npc.EditorID ?? "Unnamed"} ({npcFid})");
                                 Directory.CreateDirectory(nifDir);
                                 Directory.CreateDirectory(ddsDir);
                                 nifCopied = true;
                                 ddsCopied = true;
-                                Console.WriteLine($"Assumed facegen for template {template.EditorID ?? "Unnamed"} ({templateFid}) from Skyrim.esm for Afflicted NPC");
+                                Console.WriteLine($"Assumed facegen for template {template.EditorID ?? "Unnamed"} ({templateFid}) from Skyrim.esm for Afflicted template");
                             }
                             else
                             {
@@ -570,12 +580,13 @@ namespace SkyLady.SkyLady
                                 break;
                             }
                         }
-
+                        // Single NPC Mode
                         if (!facegenCopied)
                         {
                             if (successfulTemplatesByRace.TryGetValue(race, out var successfulTemplates) && successfulTemplates.Count > 0)
                             {
                                 template = successfulTemplates[random.Next(successfulTemplates.Count)];
+                                var templateRace = template.Race.TryResolve(state.LinkCache)?.EditorID;
                                 var fallbackNifPath = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", template.FormKey.ModKey.FileName, $"00{template.FormKey.IDString()}.nif");
                                 var fallbackDdsPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", template.FormKey.ModKey.FileName, $"00{template.FormKey.IDString()}.dds");
                                 var outputModFolder = "G:\\LoreRim\\mods\\SkyLady";
@@ -584,9 +595,20 @@ namespace SkyLady.SkyLady
                                 var nifDir = Path.GetDirectoryName(patchedNifPath) ?? throw new InvalidOperationException("NIF path directory is null");
                                 var ddsDir = Path.GetDirectoryName(patchedDdsPath) ?? throw new InvalidOperationException("DDS path directory is null");
 
-                                fileCopyOperations.Add((fallbackNifPath, patchedNifPath));
-                                fileCopyOperations.Add((fallbackDdsPath, patchedDdsPath));
-                                successfulPatches++;
+                                if (template.FormKey.ModKey.FileName.Equals("Skyrim.esm") && templateRace == "DA13AfflictedRace")
+                                {
+                                    Directory.CreateDirectory(nifDir);
+                                    Directory.CreateDirectory(ddsDir);
+                                    successfulPatches++;
+                                    Console.WriteLine($"Patched NPC: {npc.EditorID ?? "Unnamed"} with Fallback Template {template.EditorID ?? "Unnamed"} (Race: {race}) - assumed facegen for Afflicted template");
+                                }
+                                else
+                                {
+                                    fileCopyOperations.Add((fallbackNifPath, patchedNifPath));
+                                    fileCopyOperations.Add((fallbackDdsPath, patchedDdsPath));
+                                    successfulPatches++;
+                                    Console.WriteLine($"Patched NPC: {npc.EditorID ?? "Unnamed"} with Fallback Template {template.EditorID ?? "Unnamed"} (Race: {race})");
+                                }
 
                                 // Add SkyLadyPatched keyword only if it doesn't already exist
                                 if (!(patchedNpc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false))
@@ -623,6 +645,20 @@ namespace SkyLady.SkyLady
                         (npc.EditorID != null && (npc.EditorID.Equals("Player", StringComparison.OrdinalIgnoreCase) ||
                                                   npc.EditorID.Contains("preset", StringComparison.OrdinalIgnoreCase))))
                         continue;
+
+                    // Skip NPCs from excluded mods
+                    if (settings.ModsToExcludeFromPatching.Contains(npc.FormKey.ModKey))
+                    {
+                        Console.WriteLine($"Skipped NPC: {npc.EditorID ?? "Unnamed"} ({npc.FormKey.IDString()}) - mod {npc.FormKey.ModKey.FileName} is excluded from patching.");
+                        continue;
+                    }
+
+                    // Skip NPCs in the exclusion list
+                    if (settings.NpcsToExcludeFromPatching.Any(excludedNpc => excludedNpc.FormKey == npc.FormKey))
+                    {
+                        Console.WriteLine($"Skipped NPC: {npc.EditorID ?? "Unnamed"} ({npc.FormKey.IDString()}) - NPC is excluded from patching.");
+                        continue;
+                    }
 
                     // Check if NPC has already been patched
                     bool hasBeenPatched = npc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false;
@@ -702,10 +738,11 @@ namespace SkyLady.SkyLady
                             var templateDdsPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", templateFileName, $"00{templateFid}.dds");
 
                             var bsaPath = Path.Combine(state.DataFolderPath, templateFileName.Replace(".esm", ".bsa").Replace(".esp", ".bsa"));
-                            if (File.Exists(bsaPath))
+                            var templateRace = template.Race.TryResolve(state.LinkCache)?.EditorID;
+                            if (File.Exists(bsaPath) || (blacklistedMods.Contains(templateFileName) && !(templateFileName.Equals("Skyrim.esm") && templateRace == "DA13AfflictedRace")))
                             {
-                                Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({templateFid}) from {templateFileName} for NPC {npc.EditorID ?? "Unnamed"} - mod uses a .bsa archive, which the patcher cannot access.");
-                                skippedTemplates[template.EditorID ?? "Unnamed"] = (templateFileName, "Mod uses a .bsa archive");
+                                Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({templateFid}) from {templateFileName} for NPC {npc.EditorID ?? "Unnamed"} - {(File.Exists(bsaPath) ? "mod uses a .bsa archive" : "mod is blacklisted")} and cannot be used as a template.");
+                                skippedTemplates[template.EditorID ?? "Unnamed"] = (templateFileName, File.Exists(bsaPath) ? "Mod uses a .bsa archive" : "Mod is blacklisted");
                                 continue;
                             }
 
@@ -784,14 +821,14 @@ namespace SkyLady.SkyLady
                             var nifDir = Path.GetDirectoryName(patchedNifPath) ?? throw new InvalidOperationException("NIF path directory is null");
                             var ddsDir = Path.GetDirectoryName(patchedDdsPath) ?? throw new InvalidOperationException("DDS path directory is null");
 
-                            if (templateFileName.Equals("Skyrim.esm") && race == "DA13AfflictedRace")
+                            if (templateFileName.Equals("Skyrim.esm") && templateRace == "DA13AfflictedRace")
                             {
                                 Console.WriteLine($"Bypass triggered for template {template.EditorID ?? "Unnamed"} ({templateFid}) for NPC {npc.EditorID ?? "Unnamed"} ({npcFid})");
                                 Directory.CreateDirectory(nifDir);
                                 Directory.CreateDirectory(ddsDir);
                                 nifCopied = true;
                                 ddsCopied = true;
-                                Console.WriteLine($"Assumed facegen for template {template.EditorID ?? "Unnamed"} ({templateFid}) from Skyrim.esm for Afflicted NPC");
+                                Console.WriteLine($"Assumed facegen for template {template.EditorID ?? "Unnamed"} ({templateFid}) from Skyrim.esm for Afflicted template");
                             }
                             else
                             {
@@ -852,12 +889,13 @@ namespace SkyLady.SkyLady
                                 break;
                             }
                         }
-
+                        // Normal NPC mode
                         if (!facegenCopied)
                         {
                             if (successfulTemplatesByRace.TryGetValue(race, out var successfulTemplates) && successfulTemplates.Count > 0)
                             {
                                 template = successfulTemplates[random.Next(successfulTemplates.Count)];
+                                var templateRace = template.Race.TryResolve(state.LinkCache)?.EditorID;
                                 var fallbackNifPath = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", template.FormKey.ModKey.FileName, $"00{template.FormKey.IDString()}.nif");
                                 var fallbackDdsPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", template.FormKey.ModKey.FileName, $"00{template.FormKey.IDString()}.dds");
                                 var outputModFolder = "G:\\LoreRim\\mods\\SkyLady";
@@ -866,9 +904,20 @@ namespace SkyLady.SkyLady
                                 var nifDir = Path.GetDirectoryName(patchedNifPath) ?? throw new InvalidOperationException("NIF path directory is null");
                                 var ddsDir = Path.GetDirectoryName(patchedDdsPath) ?? throw new InvalidOperationException("DDS path directory is null");
 
-                                fileCopyOperations.Add((fallbackNifPath, patchedNifPath));
-                                fileCopyOperations.Add((fallbackDdsPath, patchedDdsPath));
-                                successfulPatches++;
+                                if (template.FormKey.ModKey.FileName.Equals("Skyrim.esm") && templateRace == "DA13AfflictedRace")
+                                {
+                                    Directory.CreateDirectory(nifDir);
+                                    Directory.CreateDirectory(ddsDir);
+                                    successfulPatches++;
+                                    Console.WriteLine($"Patched NPC: {npc.EditorID ?? "Unnamed"} with Fallback Template {template.EditorID ?? "Unnamed"} (Race: {race}) - assumed facegen for Afflicted template");
+                                }
+                                else
+                                {
+                                    fileCopyOperations.Add((fallbackNifPath, patchedNifPath));
+                                    fileCopyOperations.Add((fallbackDdsPath, patchedDdsPath));
+                                    successfulPatches++;
+                                    Console.WriteLine($"Patched NPC: {npc.EditorID ?? "Unnamed"} with Fallback Template {template.EditorID ?? "Unnamed"} (Race: {race})");
+                                }
 
                                 // Add SkyLadyPatched keyword only if it doesn't already exist
                                 if (!(patchedNpc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false))
@@ -926,7 +975,7 @@ namespace SkyLady.SkyLady
                     (string modName, string reason) = entry.Value;
                     Console.WriteLine($"- Template: {templateId}, Mod: {modName}, Reason: {reason}");
                 }
-                Console.WriteLine("If you encounter issues with these templates, consider adding the listed mods to 'SkyLady blacklist.txt' in the SkyLady mod folder.");
+                Console.WriteLine("If you encounter issues with these templates, consider adding the listed mods to the 'Template Mod Blacklist' in the patcher settings.");
             }
 
             if (filteredNpcs.Count != 0)
