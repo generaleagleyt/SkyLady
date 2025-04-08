@@ -1,5 +1,5 @@
 {
-  "Nickname": "SkyFem Patcher",
+  "Nickname": "SkyLady",
   "Visibility": "Exclude",
   "OneLineDescription": "Feminizes male NPCs in Skyrim",
   "LongDescription": "A WIP patcher that copies female NPC appearance data to male NPCs, including facegen files.",

@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Analysis.DI;
 using System.IO;
 using Mutagen.Bethesda.Synthesis.Settings;
 
-namespace SkyFemPatcher.SkyFemPatcher
+namespace SkyLady.SkyLady
 {
     // Settings class for GUI
     public class PatcherSettings
@@ -23,7 +23,7 @@ namespace SkyFemPatcher.SkyFemPatcher
     public class Program
     {
         private static readonly char[] LineSeparators = ['\n', '\r'];
-        private static readonly FormKey SkyFemPatched = FormKey.Factory("000800:SkyFemPatcherKeywords.esp");
+        private static readonly FormKey SkyLadyPatched = FormKey.Factory("000800:SkyLadyKeywords.esp");
 
         // Define a variable to hold the settings
         static Lazy<PatcherSettings> Settings = null!;
@@ -37,7 +37,7 @@ namespace SkyFemPatcher.SkyFemPatcher
                     nickname: "Settings",
                     path: "settings.json",
                     out Settings)
-                .SetTypicalOpen(GameRelease.SkyrimSE, "SkyFem Patcher.esp")
+                .SetTypicalOpen(GameRelease.SkyrimSE, "SkyLady.esp")
                 .Run(args);
         }
 
@@ -94,11 +94,11 @@ namespace SkyFemPatcher.SkyFemPatcher
             // Use the settings from the Lazy variable
             var settings = Settings.Value;
 
-            Console.WriteLine("SkyFem Patcher (Side) running on .NET 8.0...");
-            var racesPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyFem Patcher", "SkyFem races.txt");
-            var partsToCopyPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyFem Patcher", "SkyFem partsToCopy.txt");
-            var blacklistPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyFem Patcher", "SkyFem blacklist.txt");
-            var targetModsPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyFem Patcher", "SkyFem target mods.txt");
+            Console.WriteLine("SkyLady (Side) running on .NET 8.0...");
+            var racesPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyLady", "SkyLady races.txt");
+            var partsToCopyPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyLady", "SkyLady partsToCopy.txt");
+            var blacklistPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyLady", "SkyLady blacklist.txt");
+            var targetModsPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyLady", "SkyLady target mods.txt");
             var humanoidRaces = new HashSet<string>(File.ReadAllLines(racesPath).Select(line => line.Trim()));
             var partsToCopy = File.ReadAllLines(partsToCopyPath).ToHashSet();
             HashSet<string> blacklistedMods = File.Exists(blacklistPath) ? [.. File.ReadAllLines(blacklistPath).Select(line => line.Trim())] : [];
@@ -126,17 +126,17 @@ namespace SkyFemPatcher.SkyFemPatcher
                 {
                     requiemKeys.UnionWith(targetMods);
                     patchEntireLoadOrder = false;
-                    Console.WriteLine("Patching specific mods from SkyFem target mods.txt:");
+                    Console.WriteLine("Patching specific mods from SkyLady target mods.txt:");
                     foreach (var mod in requiemKeys) Console.WriteLine($"  {mod.FileName}");
                 }
                 else
                 {
-                    Console.WriteLine("SkyFem target mods.txt is empty - patching entire load order.");
+                    Console.WriteLine("SkyLady target mods.txt is empty - patching entire load order.");
                 }
             }
             else
             {
-                Console.WriteLine("SkyFem target mods.txt not found - patching entire load order.");
+                Console.WriteLine("SkyLady target mods.txt not found - patching entire load order.");
             }
 
             // Cache facegen file existence for NPCs with humanoid races only
@@ -290,7 +290,7 @@ namespace SkyFemPatcher.SkyFemPatcher
                             continue;
                         }
                         // Check if NPC has already been patched
-                        bool hasBeenPatched = npc.Keywords?.Any(k => k.FormKey == SkyFemPatched) ?? false;
+                        bool hasBeenPatched = npc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false;
                         if (hasBeenPatched)
                         {
                             skippedDueToPatch++; // Increment counter
@@ -386,7 +386,7 @@ namespace SkyFemPatcher.SkyFemPatcher
                             }
 
                             // Delete existing facegen files before patching
-                            DeleteExistingFacegenFiles("G:\\LoreRim\\mods\\SkyFem Patcher", npc.FormKey);
+                            DeleteExistingFacegenFiles("G:\\LoreRim\\mods\\SkyLady", npc.FormKey);
 
                             var patchedNpc = state.PatchMod.Npcs.GetOrAddAsOverride(npc);
 
@@ -503,7 +503,7 @@ namespace SkyFemPatcher.SkyFemPatcher
                                 patchedNpc.Height = template.Height != 0.0f ? template.Height : 1.0f;
                                 patchedNpc.Weight = template.Weight != 0.0f ? template.Weight : 50.0f;
 
-                                var outputModFolder = "G:\\LoreRim\\mods\\SkyFem Patcher";
+                                var outputModFolder = "G:\\LoreRim\\mods\\SkyLady";
                                 var patchedNifPath = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", npc.FormKey.ModKey.FileName, $"00{npcFid}.nif");
                                 var patchedDdsPath = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", npc.FormKey.ModKey.FileName, $"00{npcFid}.dds");
 
@@ -557,16 +557,16 @@ namespace SkyFemPatcher.SkyFemPatcher
                                     }
                                     templateList.Add(template);
 
-                                    // Add SkyFemPatched keyword only if it doesn't already exist
-                                    if (!(patchedNpc.Keywords?.Any(k => k.FormKey == SkyFemPatched) ?? false))
+                                    // Add SkyLadyPatched keyword only if it doesn't already exist
+                                    if (!(patchedNpc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false))
                                     {
                                         patchedNpc.Keywords ??= [];
-                                        patchedNpc.Keywords.Add(SkyFemPatched);
-                                        Console.WriteLine($"Added SkyFemPatched keyword to {npc.EditorID ?? "Unnamed"}");
+                                        patchedNpc.Keywords.Add(SkyLadyPatched);
+                                        Console.WriteLine($"Added SkyLadyPatched keyword to {npc.EditorID ?? "Unnamed"}");
                                     }
                                     else
                                     {
-                                        Console.WriteLine($"NPC {npc.EditorID ?? "Unnamed"} already has SkyFemPatched keyword, skipping addition.");
+                                        Console.WriteLine($"NPC {npc.EditorID ?? "Unnamed"} already has SkyLadyPatched keyword, skipping addition.");
                                     }
 
                                     Console.WriteLine($"Patched NPC: {npc.EditorID ?? "Unnamed"} with {template.EditorID ?? "Unnamed"} (Race: {race})");
@@ -581,7 +581,7 @@ namespace SkyFemPatcher.SkyFemPatcher
                                     template = successfulTemplates[random.Next(successfulTemplates.Count)];
                                     var fallbackNifPath = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", template.FormKey.ModKey.FileName, $"00{template.FormKey.IDString()}.nif");
                                     var fallbackDdsPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", template.FormKey.ModKey.FileName, $"00{template.FormKey.IDString()}.dds");
-                                    var outputModFolder = "G:\\LoreRim\\mods\\SkyFem Patcher";
+                                    var outputModFolder = "G:\\LoreRim\\mods\\SkyLady";
                                     var patchedNifPath = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", npc.FormKey.ModKey.FileName, $"00{npcFid}.nif");
                                     var patchedDdsPath = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", npc.FormKey.ModKey.FileName, $"00{npcFid}.dds");
                                     var nifDir = Path.GetDirectoryName(patchedNifPath) ?? throw new InvalidOperationException("NIF path directory is null");
@@ -591,16 +591,16 @@ namespace SkyFemPatcher.SkyFemPatcher
                                     fileCopyOperations.Add((fallbackDdsPath, patchedDdsPath));
                                     successfulPatches++;
 
-                                    // Add SkyFemPatched keyword only if it doesn't already exist
-                                    if (!(patchedNpc.Keywords?.Any(k => k.FormKey == SkyFemPatched) ?? false))
+                                    // Add SkyLadyPatched keyword only if it doesn't already exist
+                                    if (!(patchedNpc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false))
                                     {
                                         patchedNpc.Keywords ??= [];
-                                        patchedNpc.Keywords.Add(SkyFemPatched);
-                                        Console.WriteLine($"Added SkyFemPatched keyword to {npc.EditorID ?? "Unnamed"}");
+                                        patchedNpc.Keywords.Add(SkyLadyPatched);
+                                        Console.WriteLine($"Added SkyLadyPatched keyword to {npc.EditorID ?? "Unnamed"}");
                                     }
                                     else
                                     {
-                                        Console.WriteLine($"NPC {npc.EditorID ?? "Unnamed"} already has SkyFemPatched keyword, skipping addition.");
+                                        Console.WriteLine($"NPC {npc.EditorID ?? "Unnamed"} already has SkyLadyPatched keyword, skipping addition.");
                                     }
 
                                     Console.WriteLine($"Patched NPC: {npc.EditorID ?? "Unnamed"} with Fallback Template {template.EditorID ?? "Unnamed"} (Race: {race})");
@@ -639,10 +639,10 @@ namespace SkyFemPatcher.SkyFemPatcher
                         continue;
 
                     // Check if NPC has already been patched
-                    bool hasBeenPatched = npc.Keywords?.Any(k => k.FormKey == SkyFemPatched) ?? false;
+                    bool hasBeenPatched = npc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false;
                     if (hasBeenPatched)
                     {
-                        Console.WriteLine($"Skipped NPC: {npc.EditorID ?? "Unnamed"} ({npc.FormKey.IDString()}) - already patched by SkyFem");
+                        Console.WriteLine($"Skipped NPC: {npc.EditorID ?? "Unnamed"} ({npc.FormKey.IDString()}) - already patched by SkyLady");
                         continue;
                     }
 
@@ -738,41 +738,56 @@ namespace SkyFemPatcher.SkyFemPatcher
                             {
                                 var voiceTypeGetter = npc.Voice.TryResolve(state.LinkCache);
                                 var voiceType = voiceTypeGetter?.EditorID;
-                                if (voiceType != null && voiceTypeMap.TryGetValue(voiceType, out var femaleVoiceType))
+                                if (voiceType != null)
                                 {
-                                    var femaleVoice = state.LoadOrder.PriorityOrder.VoiceType().WinningOverrides()
-                                        .FirstOrDefault(vt => vt.EditorID == femaleVoiceType);
-                                    if (femaleVoice != null)
+                                    // Check if the current voice type is already a female voice
+                                    bool isFemaleVoice = voiceType.Contains("Female", StringComparison.OrdinalIgnoreCase) ||
+                                                         voiceTypeMap.Values.Any(v => v.Equals(voiceType, StringComparison.OrdinalIgnoreCase)) ||
+                                                         raceVoiceFallbacks.Values.Any(fallbacks => fallbacks.Contains(voiceType));
+
+                                    if (!isFemaleVoice)
                                     {
-                                        patchedNpc.Voice.SetTo(femaleVoice);
-                                        Console.WriteLine($"Swapped voice type for {npc.EditorID ?? "Unnamed"} from {voiceType} to {femaleVoiceType}");
-                                    }
-                                }
-                                else if (voiceType != null && raceVoiceFallbacks.TryGetValue(race, out var fallbackVoices) && fallbackVoices.Count > 0)
-                                {
-                                    var selectedVoiceType = fallbackVoices[random.Next(fallbackVoices.Count)];
-                                    var fallbackVoice = state.LoadOrder.PriorityOrder.VoiceType().WinningOverrides()
-                                        .FirstOrDefault(vt => vt.EditorID == selectedVoiceType);
-                                    if (fallbackVoice != null)
-                                    {
-                                        patchedNpc.Voice.SetTo(fallbackVoice);
-                                        Console.WriteLine($"No female voice mapping for {voiceType} - used fallback {selectedVoiceType} for {npc.EditorID ?? "Unnamed"} (Race: {race})");
+                                        if (voiceTypeMap.TryGetValue(voiceType, out var femaleVoiceType))
+                                        {
+                                            var femaleVoice = state.LoadOrder.PriorityOrder.VoiceType().WinningOverrides()
+                                                .FirstOrDefault(vt => vt.EditorID == femaleVoiceType);
+                                            if (femaleVoice != null)
+                                            {
+                                                patchedNpc.Voice.SetTo(femaleVoice);
+                                                Console.WriteLine($"Swapped voice type for {npc.EditorID ?? "Unnamed"} from {voiceType} to {femaleVoiceType}");
+                                            }
+                                        }
+                                        else if (raceVoiceFallbacks.TryGetValue(race, out var fallbackVoices) && fallbackVoices.Count > 0)
+                                        {
+                                            var selectedVoiceType = fallbackVoices[random.Next(fallbackVoices.Count)];
+                                            var fallbackVoice = state.LoadOrder.PriorityOrder.VoiceType().WinningOverrides()
+                                                .FirstOrDefault(vt => vt.EditorID == selectedVoiceType);
+                                            if (fallbackVoice != null)
+                                            {
+                                                patchedNpc.Voice.SetTo(fallbackVoice);
+                                                Console.WriteLine($"No female voice mapping for {voiceType} - used fallback {selectedVoiceType} for {npc.EditorID ?? "Unnamed"} (Race: {race})");
+                                            }
+                                            else
+                                            {
+                                                Console.WriteLine($"Failed to find fallback voice {selectedVoiceType} for {npc.EditorID ?? "Unnamed"} (Race: {race})");
+                                            }
+                                        }
+                                        else
+                                        {
+                                            Console.WriteLine($"No fallback voices defined for race {race} for {npc.EditorID ?? "Unnamed"}");
+                                        }
                                     }
                                     else
                                     {
-                                        Console.WriteLine($"Failed to find fallback voice {selectedVoiceType} for {npc.EditorID ?? "Unnamed"} (Race: {race})");
+                                        Console.WriteLine($"NPC {npc.EditorID ?? "Unnamed"} already has a female voice ({voiceType}), skipping voice change.");
                                     }
-                                }
-                                else if (voiceType != null)
-                                {
-                                    Console.WriteLine($"No fallback voices defined for race {race} for {npc.EditorID ?? "Unnamed"}");
                                 }
                             }
 
                             patchedNpc.Height = template.Height != 0.0f ? template.Height : 1.0f;
                             patchedNpc.Weight = template.Weight != 0.0f ? template.Weight : 50.0f;
 
-                            var outputModFolder = "G:\\LoreRim\\mods\\SkyFem Patcher";
+                            var outputModFolder = "G:\\LoreRim\\mods\\SkyLady";
                             var patchedNifPath = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", npc.FormKey.ModKey.FileName, $"00{npcFid}.nif");
                             var patchedDdsPath = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", npc.FormKey.ModKey.FileName, $"00{npcFid}.dds");
 
@@ -826,9 +841,17 @@ namespace SkyFemPatcher.SkyFemPatcher
                                 }
                                 templateList.Add(template);
 
-                                // Add SkyFemPatched keyword
-                                patchedNpc.Keywords ??= [];
-                                patchedNpc.Keywords.Add(SkyFemPatched);
+                                // Add SkyLadyPatched keyword only if it doesn't already exist
+                                if (!(patchedNpc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false))
+                                {
+                                    patchedNpc.Keywords ??= [];
+                                    patchedNpc.Keywords.Add(SkyLadyPatched);
+                                    Console.WriteLine($"Added SkyLadyPatched keyword to {npc.EditorID ?? "Unnamed"}");
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"NPC {npc.EditorID ?? "Unnamed"} already has SkyLadyPatched keyword, skipping addition.");
+                                }
 
                                 Console.WriteLine($"Patched Male NPC: {npc.EditorID ?? "Unnamed"} with {template.EditorID ?? "Unnamed"} (Race: {race})");
 
@@ -851,7 +874,7 @@ namespace SkyFemPatcher.SkyFemPatcher
                                 template = successfulTemplates[random.Next(successfulTemplates.Count)];
                                 var fallbackNifPath = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", template.FormKey.ModKey.FileName, $"00{template.FormKey.IDString()}.nif");
                                 var fallbackDdsPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", template.FormKey.ModKey.FileName, $"00{template.FormKey.IDString()}.dds");
-                                var outputModFolder = "G:\\LoreRim\\mods\\SkyFem Patcher";
+                                var outputModFolder = "G:\\LoreRim\\mods\\SkyLady";
                                 var patchedNifPath = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", npc.FormKey.ModKey.FileName, $"00{npcFid}.nif");
                                 var patchedDdsPath = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", npc.FormKey.ModKey.FileName, $"00{npcFid}.dds");
                                 var nifDir = Path.GetDirectoryName(patchedNifPath) ?? throw new InvalidOperationException("NIF path directory is null");
@@ -861,9 +884,17 @@ namespace SkyFemPatcher.SkyFemPatcher
                                 fileCopyOperations.Add((fallbackDdsPath, patchedDdsPath));
                                 successfulPatches++;
 
-                                // Add SkyFemPatched keyword
-                                patchedNpc.Keywords ??= [];
-                                patchedNpc.Keywords.Add(SkyFemPatched);
+                                // Add SkyLadyPatched keyword only if it doesn't already exist
+                                if (!(patchedNpc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false))
+                                {
+                                    patchedNpc.Keywords ??= [];
+                                    patchedNpc.Keywords.Add(SkyLadyPatched);
+                                    Console.WriteLine($"Added SkyLadyPatched keyword to {npc.EditorID ?? "Unnamed"}");
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"NPC {npc.EditorID ?? "Unnamed"} already has SkyLadyPatched keyword, skipping addition.");
+                                }
 
                                 Console.WriteLine($"Patched Male NPC: {npc.EditorID ?? "Unnamed"} with Fallback Template {template.EditorID ?? "Unnamed"} (Race: {race})");
 
@@ -909,7 +940,7 @@ namespace SkyFemPatcher.SkyFemPatcher
                     (string modName, string reason) = entry.Value;
                     Console.WriteLine($"- Template: {templateId}, Mod: {modName}, Reason: {reason}");
                 }
-                Console.WriteLine("If you encounter issues with these templates, consider adding the listed mods to 'SkyFem blacklist.txt' in the SkyFem Patcher mod folder.");
+                Console.WriteLine("If you encounter issues with these templates, consider adding the listed mods to 'SkyLady blacklist.txt' in the SkyLady mod folder.");
             }
 
             if (filteredNpcs.Count != 0)
