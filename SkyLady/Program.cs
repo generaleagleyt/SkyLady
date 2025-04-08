@@ -291,7 +291,8 @@ namespace SkyLady.SkyLady
                         bool isAfflicted = race == "DA13AfflictedRace";
                         bool notBlacklisted = !blacklistedMods.Contains(npc.FormKey.ModKey.FileName);
                         var (nifExists, ddsExists) = facegenCache[(npc.FormKey.ModKey.FileName.ToString(), npc.FormKey.IDString())];
-                        bool condition = (isAfflicted && isSkyrimEsm) || (notBlacklisted && (nifExists && ddsExists));
+                        bool hasBeenPatched = npc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false;
+                        bool condition = !hasBeenPatched && ((isAfflicted && isSkyrimEsm) || (notBlacklisted && (nifExists && ddsExists)));
                         if (condition)
                         {
                             femaleTemplatesByRace[race] = femaleTemplatesByRace.GetValueOrDefault(race, []);
