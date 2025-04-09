@@ -7,6 +7,7 @@ using Noggog;
 using Mutagen.Bethesda.Plugins.Analysis.DI;
 using System.IO;
 using Mutagen.Bethesda.Synthesis.Settings;
+using Mutagen.Bethesda.Plugins.Binary.Parameters;
 
 namespace SkyLady.SkyLady
 {
@@ -27,6 +28,7 @@ namespace SkyLady.SkyLady
     public class PatcherSettings
     {
         [SynthesisSettingName("Patch Single NPC Only")]
+        [SynthesisTooltip("If enabled, the patcher will only process the NPCs selected below. If disabled, it will patch all male NPCs in the target mods or entire load order.")]
         public bool PatchSingleNpcOnly { get; set; } = false;
 
         [SynthesisSettingName("NPCs to Patch")]
@@ -36,6 +38,25 @@ namespace SkyLady.SkyLady
         [SynthesisSettingName("Random Seed (Optional)")]
         [SynthesisTooltip("Enter a number to make template randomization consistent. Leave empty for true randomness each run.")]
         public string RandomSeed { get; set; } = "";
+
+        [SynthesisSettingName("Use Default Race Fallback")]
+        [SynthesisTooltip("If enabled, custom races with no female templates will use NordRace and ImperialRace templates as a fallback. If disabled, a matching race is required.")]
+        public bool UseDefaultRaceFallback { get; set; } = false;
+
+        [SynthesisDescription("Note: The 'Use Default Race Fallback' setting only applies in Single NPC Mode.")]
+        public static string UseDefaultRaceFallbackNote => string.Empty;
+
+        [SynthesisSettingName("Flag Output Plugins as ESL")]
+        [SynthesisTooltip("If enabled, the output plugins will be flagged as ESL (Light Master) if they meet the eligibility criteria (max 2048 new records).")]
+        public bool FlagOutputAsEsl { get; set; } = false;
+
+        [SynthesisSettingName("Append Suffix to Output Filenames")]
+        [SynthesisTooltip("If enabled, the output plugins will have the specified suffix (or a timestamp if none is provided) appended to their filenames (e.g., SkyLady Patcher_Main.esp) to prevent overwriting on subsequent runs.")]
+        public bool AppendSuffixToOutput { get; set; } = true;
+
+        [SynthesisSettingName("Output Filename Suffix")]
+        [SynthesisTooltip("Enter a custom suffix to append to the output filenames (e.g., 'Main' for SkyLady Patcher_Main.esp). Leave empty to use a timestamp (YYYYMMDD_HHmm).")]
+        public string OutputNameSuffix { get; set; } = "";
 
         [SynthesisSettingName("Template Mod Blacklist")]
         [SynthesisTooltip("Mods to exclude from template collection (e.g., mods with vanilla looks or .nif issues).")]
@@ -134,6 +155,7 @@ namespace SkyLady.SkyLady
 
             Console.WriteLine("SkyLady (Side) running on .NET 8.0...");
             var racesPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyLady", "SkyLady races.txt");
+            var raceCompatibilityPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyLady", "SkyLady Race Compatibility.txt");
             var partsToCopyPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyLady", "SkyLady partsToCopy.txt");
             var humanoidRaces = new HashSet<string>(File.ReadAllLines(racesPath).Select(line => line.Trim()));
             var partsToCopy = File.ReadAllLines(partsToCopyPath).ToHashSet();
@@ -189,39 +211,132 @@ namespace SkyLady.SkyLady
                 .WinningOverrides()
                 .ToDictionary(n => n.FormKey, n => n);
 
-            // Race compatibility mapping
-            var raceCompatibilityMap = new Dictionary<string, List<string>>
+            // Race compatibility mapping - Load from SkyLady Race Compatibility.txt if it exists
+            var raceCompatibilityMap = new Dictionary<string, List<string>>();
+            if (File.Exists(raceCompatibilityPath))
             {
-                { "NordRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace" } },
-                { "NordRaceVampire", new List<string> { "NordRace", "NordRaceVampire", "HothRace" } },
-                { "HothRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace" } },
-                { "DarkElfRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-                { "DarkElfRaceVampire", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-                { "_00DwemerRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-                { "MASNerevarineRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-                { "ArgonianRace", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
-                { "ArgonianRaceVampire", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
-                { "KhajiitRace", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
-                { "KhajiitRaceVampire", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
-                { "HighElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-                { "HighElfRaceVampire", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-                { "SnowElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-                { "WB_ConjureCraftlord_Race", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-                { "WoodElfRace", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
-                { "WoodElfRaceVampire", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
-                { "BretonRace", new List<string> { "BretonRace", "BretonRaceVampire" } },
-                { "BretonRaceVampire", new List<string> { "BretonRace", "BretonRaceVampire" } },
-                { "ImperialRace", new List<string> { "ImperialRace", "ImperialRaceVampire" } },
-                { "ImperialRaceVampire", new List<string> { "ImperialRace", "ImperialRaceVampire" } },
-                { "RedguardRace", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
-                { "RedguardRaceVampire", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
-                { "OrcRace", new List<string> { "OrcRace", "OrcRaceVampire" } },
-                { "OrcRaceVampire", new List<string> { "OrcRace", "OrcRaceVampire" } },
-                { "ElderRace", new List<string> { "ElderRace", "ElderRaceVampire" } },
-                { "ElderRaceVampire", new List<string> { "ElderRace", "ElderRaceVampire" } },
-                { "DremoraRace", new List<string> { "DremoraRace" } },
-                { "DA13AfflictedRace", new List<string> { "DA13AfflictedRace" } }
-            };
+                try
+                {
+                    var lines = File.ReadAllLines(raceCompatibilityPath);
+                    foreach (var line in lines)
+                    {
+                        var trimmedLine = line.Trim();
+                        if (string.IsNullOrEmpty(trimmedLine) || trimmedLine.StartsWith("#")) continue; // Skip empty lines or comments
+
+                        var parts = trimmedLine.Split(':');
+                        if (parts.Length != 2)
+                        {
+                            Console.WriteLine($"Invalid race compatibility entry in SkyLady Race Compatibility.txt: {trimmedLine}. Expected format: Race: CompatibleRace1, CompatibleRace2, ...");
+                            continue;
+                        }
+
+                        var race = parts[0].Trim();
+                        var compatibleRaces = parts[1].Split(',')
+                            .Select(r => r.Trim())
+                            .Where(r => !string.IsNullOrEmpty(r))
+                            .ToList();
+
+                        if (compatibleRaces.Count == 0)
+                        {
+                            Console.WriteLine($"No compatible races defined for {race} in SkyLady Race Compatibility.txt. Skipping entry.");
+                            continue;
+                        }
+
+                        raceCompatibilityMap[race] = compatibleRaces;
+                        Console.WriteLine($"Loaded race compatibility for {race}: {string.Join(", ", compatibleRaces)}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error reading SkyLady Race Compatibility.txt: {ex.Message}. Falling back to default race compatibility map.");
+                }
+            }
+
+            // If the file doesn't exist or failed to load, use the default hardcoded map
+            if (raceCompatibilityMap.Count == 0)
+            {
+                Console.WriteLine("Using default race compatibility map.");
+                raceCompatibilityMap = new Dictionary<string, List<string>>
+                {
+                    { "NordRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
+                    { "NordRaceVampire", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
+                    { "HothRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
+                    { "ImperialRace", new List<string> { "ImperialRace", "ImperialRaceVampire", "NordRace", "NordRaceVampire", "HothRace" } },
+                    { "ImperialRaceVampire", new List<string> { "ImperialRace", "ImperialRaceVampire", "NordRace", "NordRaceVampire", "HothRace" } },
+                    { "DarkElfRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+                    { "DarkElfRaceVampire", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+                    { "_00DwemerRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+                    { "MASNerevarineRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+                    { "ArgonianRace", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
+                    { "ArgonianRaceVampire", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
+                    { "KhajiitRace", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
+                    { "KhajiitRaceVampire", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
+                    { "HighElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+                    { "HighElfRaceVampire", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+                    { "SnowElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+                    { "WB_ConjureCraftlord_Race", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+                    { "WoodElfRace", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
+                    { "WoodElfRaceVampire", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
+                    { "BretonRace", new List<string> { "BretonRace", "BretonRaceVampire" } },
+                    { "BretonRaceVampire", new List<string> { "BretonRace", "BretonRaceVampire" } },
+                    { "RedguardRace", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
+                    { "RedguardRaceVampire", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
+                    { "OrcRace", new List<string> { "OrcRace", "OrcRaceVampire" } },
+                    { "OrcRaceVampire", new List<string> { "OrcRace", "OrcRaceVampire" } },
+                    { "ElderRace", new List<string> { "ElderRace", "ElderRaceVampire" } },
+                    { "ElderRaceVampire", new List<string> { "ElderRace", "ElderRaceVampire" } },
+                    { "DremoraRace", new List<string> { "DremoraRace" } },
+                    { "DA13AfflictedRace", new List<string> { "DA13AfflictedRace" } }
+                };
+            }
+
+            // Validate race EditorIDs against the load order
+            Console.WriteLine("Validating race EditorIDs from race compatibility map...");
+            var validRaceEditorIDs = state.LoadOrder.PriorityOrder.Race().WinningOverrides()
+                .Select(race => race.EditorID)
+                .Where(id => !string.IsNullOrEmpty(id))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var validatedRaceCompatibilityMap = new Dictionary<string, List<string>>();
+            foreach (var entry in raceCompatibilityMap)
+            {
+                var race = entry.Key;
+                var compatibleRaces = entry.Value;
+
+                // Validate the race key
+                if (!validRaceEditorIDs.Contains(race))
+                {
+                    Console.WriteLine($"Warning: Race EditorID '{race}' in race compatibility map does not exist in the load order. Skipping this entry.");
+                    continue;
+                }
+
+                // Validate each compatible race
+                var validCompatibleRaces = compatibleRaces
+                    .Where(compatibleRace =>
+                    {
+                        if (validRaceEditorIDs.Contains(compatibleRace))
+                        {
+                            return true;
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Warning: Compatible race EditorID '{compatibleRace}' for race '{race}' in race compatibility map does not exist in the load order. This race will be skipped.");
+                            return false;
+                        }
+                    })
+                    .ToList();
+
+                if (validCompatibleRaces.Count == 0)
+                {
+                    Console.WriteLine($"Warning: No valid compatible races remain for race '{race}' after validation. Skipping this entry.");
+                    continue;
+                }
+
+                validatedRaceCompatibilityMap[race] = validCompatibleRaces;
+            }
+
+            raceCompatibilityMap = validatedRaceCompatibilityMap;
+            Console.WriteLine($"Race compatibility map validation complete. {raceCompatibilityMap.Count} valid race entries remain.");
 
             // Voice type mapping
             var voiceTypeMap = new Dictionary<string, string>
@@ -284,10 +399,12 @@ namespace SkyLady.SkyLady
 
             // Collect female templates and count male NPCs (excluding Player and presets)
             int maleNpcCount = 0;
+            int eligibleMaleNpcCount = 0; // Count of male NPCs eligible for patching (excludes blacklisted NPCs)
             int successfulPatches = 0;
             int processedNpcs = 0; // Counter for periodic batching
             int skippedDueToPatch = 0; // Add counter for debugging
             int skippedDueToFilter = 0; // Add counter for debugging
+            var blacklistedMaleNpcsByMod = new Dictionary<ModKey, int>(); // Track blacklisted male NPCs by mod
             foreach (var npc in state.LoadOrder.PriorityOrder.Npc().WinningOverrides())
             {
                 var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
@@ -325,6 +442,18 @@ namespace SkyLady.SkyLady
                             continue;
                         }
                         maleNpcCount++;
+                        // Check if NPC is blacklisted
+                        if (settings.ModsToExcludeFromPatching.Contains(npc.FormKey.ModKey))
+                        {
+                            blacklistedMaleNpcsByMod[npc.FormKey.ModKey] = blacklistedMaleNpcsByMod.GetValueOrDefault(npc.FormKey.ModKey, 0) + 1;
+                            continue;
+                        }
+                        if (settings.NpcsToExcludeFromPatching.Any(excludedNpc => excludedNpc.FormKey == npc.FormKey))
+                        {
+                            blacklistedMaleNpcsByMod[npc.FormKey.ModKey] = blacklistedMaleNpcsByMod.GetValueOrDefault(npc.FormKey.ModKey, 0) + 1;
+                            continue;
+                        }
+                        eligibleMaleNpcCount++;
                         Console.WriteLine($"Found male NPC: {npc.EditorID ?? "Unnamed"} ({npc.FormKey.IDString()}) (Race: {race})");
                     }
                 }
@@ -1004,23 +1133,157 @@ namespace SkyLady.SkyLady
             }
             else
             {
-                Console.WriteLine($"Successfully patched {successfulPatches} out of {maleNpcCount} male NPCs with facegen.");
+                Console.WriteLine($"Successfully patched {successfulPatches} out of {eligibleMaleNpcCount} male NPCs with facegen.");
+                if (blacklistedMaleNpcsByMod.Count > 0)
+                {
+                    Console.WriteLine("\nBlacklisted Male NPCs:");
+                    foreach (var entry in blacklistedMaleNpcsByMod.OrderBy(e => e.Key.FileName.String))
+                    {
+                        Console.WriteLine($"- {entry.Key.FileName}: {entry.Value}");
+                    }
+                    int totalBlacklisted = blacklistedMaleNpcsByMod.Values.Sum();
+                    Console.WriteLine($"Total Blacklisted Male NPCs: {totalBlacklisted}");
+                    Console.WriteLine($"Total Male Humanoid NPCs in Entire Load Order: {maleNpcCount}");
+                }
             }
 
-            var splitter = new MultiModFileSplitter();
-            var splitMods = splitter.Split<ISkyrimMod, ISkyrimModGetter>(state.PatchMod, 250).ToList();
-            Console.WriteLine($"Split into {splitMods.Count} mods:");
-            for (int i = 0; i < splitMods.Count; i++)
+            // Check if splitting is needed based on the number of masters
+            var masterCount = state.PatchMod.MasterReferences.Count;
+            if (masterCount <= 250)
             {
-                var mod = splitMods[i];
-                var masterCount = mod.MasterReferences.Count;
-                var recordCount = mod.EnumerateMajorRecords().Count();
-                Console.WriteLine($"Mod {i}: {mod.ModKey.FileName}, Masters: {masterCount}, Records: {recordCount}");
-                mod.WriteToBinary(Path.Combine(state.DataFolderPath, mod.ModKey.FileName));
-            }
+                // No splitting needed; let Synthesis handle the output naturally
+                Console.WriteLine("No ESP splitting needed (master count ≤ 250). Letting Synthesis write the output ESP.");
 
-            // Throw a custom error to stop Synthesis gracefully due to too many masters
-            throw new Exception("This error indicates that the patcher ran successfully. The final ESP was split due to the 254-master limit. This error is intentional to prevent Synthesis from crashing and will be removed once ESP splitting is officially implemented in the Synthesis application.");
+                // Check if the mod can be flagged as ESL if the user enabled the option
+                if (settings.FlagOutputAsEsl)
+                {
+                    bool canBeEsl = true;
+                    uint newRecordCount = 0;
+
+                    // Check all records in the mod
+                    foreach (var rec in state.PatchMod.EnumerateMajorRecords())
+                    {
+                        // Check if the record is new (created by this mod)
+                        if (rec.FormKey.ModKey.Equals(state.PatchMod.ModKey))
+                        {
+                            newRecordCount++;
+                            // Check if the FormID is within the ESL range (0x800 to 0xFFF)
+                            if (rec.FormKey.ID < 0x800 || rec.FormKey.ID > 0xFFF)
+                            {
+                                canBeEsl = false;
+                                Console.WriteLine($"  Cannot flag output ESP as ESL: New record {rec.FormKey} has FormID outside ESL range (0x800 to 0xFFF).");
+                                break;
+                            }
+                        }
+                    }
+
+                    // Check if the number of new records exceeds the ESL limit
+                    if (newRecordCount > 2048)
+                    {
+                        canBeEsl = false;
+                        Console.WriteLine($"  Cannot flag output ESP as ESL: Exceeds 2048 new records (found {newRecordCount}).");
+                    }
+
+                    // If eligible, set the ESL flag
+                    if (canBeEsl)
+                    {
+                        state.PatchMod.ModHeader.Flags |= SkyrimModHeader.HeaderFlag.Small;
+                        Console.WriteLine($"  Flagged output ESP as ESL.");
+                    }
+                }
+
+                // Synthesis will write the ESP based on the group name
+                var recordCount = state.PatchMod.EnumerateMajorRecords().Count();
+                Console.WriteLine($"Prepared single ESP for Synthesis output: Masters: {masterCount}, Records: {recordCount}");
+            }
+            else
+            {
+                // Splitting is needed; use the MultiModFileSplitter
+                var splitter = new MultiModFileSplitter();
+                var splitMods = splitter.Split<ISkyrimMod, ISkyrimModGetter>(state.PatchMod, 250).ToList();
+                Console.WriteLine($"Split into {splitMods.Count} mods:");
+
+                // Ensure each split mod retains the master references from the original patch mod
+                foreach (var mod in splitMods)
+                {
+                    mod.MasterReferences.Clear();
+                    mod.MasterReferences.AddRange(state.PatchMod.MasterReferences.Select(m => m.DeepCopy()));
+                }
+
+                // Determine the suffix for renaming if enabled
+                string? suffix = null;
+                if (settings.AppendSuffixToOutput)
+                {
+                    suffix = string.IsNullOrWhiteSpace(settings.OutputNameSuffix)
+                        ? DateTime.Now.ToString("yyyyMMdd_HHmm")
+                        : settings.OutputNameSuffix;
+                }
+
+                for (int i = 0; i < splitMods.Count; i++)
+                {
+                    var mod = splitMods[i];
+                    var originalFileName = mod.ModKey.FileName.ToString();
+
+                    // Construct the output file path with suffix if enabled
+                    string outputFileName = originalFileName;
+                    if (suffix != null)
+                    {
+                        outputFileName = i == 0
+                            ? $"SkyLady Patcher_{suffix}.esp"
+                            : $"SkyLady Patcher_{suffix}_{i}.esp";
+                        Console.WriteLine($"Renaming output file from {originalFileName} to {outputFileName}");
+                    }
+
+                    var splitMasterCount = mod.MasterReferences.Count;
+                    var recordCount = mod.EnumerateMajorRecords().Count();
+                    Console.WriteLine($"Mod {i}: {outputFileName}, Masters: {splitMasterCount}, Records: {recordCount}");
+
+                    // Check if the mod can be flagged as ESL if the user enabled the option
+                    if (settings.FlagOutputAsEsl)
+                    {
+                        bool canBeEsl = true;
+                        uint newRecordCount = 0;
+
+                        // Check all records in the mod
+                        foreach (var rec in mod.EnumerateMajorRecords())
+                        {
+                            // Check if the record is new (created by this mod)
+                            if (rec.FormKey.ModKey.Equals(mod.ModKey))
+                            {
+                                newRecordCount++;
+                                // Check if the FormID is within the ESL range (0x800 to 0xFFF)
+                                if (rec.FormKey.ID < 0x800 || rec.FormKey.ID > 0xFFF)
+                                {
+                                    canBeEsl = false;
+                                    Console.WriteLine($"  Cannot flag {outputFileName} as ESL: New record {rec.FormKey} has FormID outside ESL range (0x800 to 0xFFF).");
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Check if the number of new records exceeds the ESL limit
+                        if (newRecordCount > 2048)
+                        {
+                            canBeEsl = false;
+                            Console.WriteLine($"  Cannot flag {outputFileName} as ESL: Exceeds 2048 new records (found {newRecordCount}).");
+                        }
+
+                        // If eligible, set the ESL flag
+                        if (canBeEsl)
+                        {
+                            mod.ModHeader.Flags |= SkyrimModHeader.HeaderFlag.Small;
+                            Console.WriteLine($"  Flagged {outputFileName} as ESL.");
+                        }
+                    }
+
+                    mod.WriteToBinary(
+                        Path.Combine(state.DataFolderPath, outputFileName),
+                        new BinaryWriteParameters { ModKey = ModKeyOption.NoCheck });
+                }
+
+                // Throw a custom error to stop Synthesis gracefully due to too many masters
+                throw new Exception("This error indicates that the patcher ran successfully. The final ESP was split due to the 254-master limit. This error is intentional to prevent Synthesis from crashing and will be removed once ESP splitting is officially implemented in the Synthesis application.");
+            }
         }
     }
 }
