@@ -1,3 +1,4 @@
+// START OF SECTION 1
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Synthesis;
 using Mutagen.Bethesda.Skyrim;
@@ -8,6 +9,7 @@ using Mutagen.Bethesda.Plugins.Analysis.DI;
 using System.IO;
 using Mutagen.Bethesda.Synthesis.Settings;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
+using System.Text.Json;
 
 namespace SkyLady.SkyLady
 {
@@ -24,6 +26,23 @@ namespace SkyLady.SkyLady
         }
     }
 
+    // Class to represent an NPC with a locked template
+    public class LockedNpcTemplate
+    {
+        [SynthesisOrder]
+        [SynthesisTooltip("The NPC whose template should be locked. Search and select an NPC to lock its template.")]
+        public IFormLinkGetter<INpcGetter> Npc { get; set; } = FormLink<INpcGetter>.Null;
+
+        [SynthesisIgnoreSetting]
+        public IFormLinkGetter<INpcGetter> Template { get; set; } = FormLink<INpcGetter>.Null;
+
+        public override string ToString()
+        {
+            if (Npc.IsNull) return "None";
+            return Template.IsNull ? Npc.FormKey.ToString() : $"{Npc.FormKey} (Template: {Template.FormKey})";
+        }
+    }
+
     // Settings class for GUI
     public class PatcherSettings
     {
@@ -35,28 +54,13 @@ namespace SkyLady.SkyLady
         [SynthesisTooltip("Select the NPCs to patch. Leave empty to patch all NPCs in the load order.")]
         public List<SkyLadyNpc> NpcsToPatch { get; set; } = [];
 
-        [SynthesisSettingName("Random Seed (Optional)")]
-        [SynthesisTooltip("Enter a number to make template randomization consistent. Leave empty for true randomness each run.")]
-        public string RandomSeed { get; set; } = "";
-
         [SynthesisSettingName("Use Default Race Fallback")]
         [SynthesisTooltip("If enabled, custom races with no female templates will use NordRace and ImperialRace templates as a fallback. If disabled, a matching race is required.")]
         public bool UseDefaultRaceFallback { get; set; } = false;
 
-        [SynthesisDescription("Note: The 'Use Default Race Fallback' setting only applies in Single NPC Mode.")]
-        public static string UseDefaultRaceFallbackNote => string.Empty;
-
-        [SynthesisSettingName("Flag Output Plugins as ESL")]
-        [SynthesisTooltip("If enabled, the output plugins will be flagged as ESL (Light Master) if they meet the eligibility criteria (max 2048 new records).")]
-        public bool FlagOutputAsEsl { get; set; } = false;
-
-        [SynthesisSettingName("Append Suffix to Output Filenames")]
-        [SynthesisTooltip("If enabled, the output plugins will have the specified suffix (or a timestamp if none is provided) appended to their filenames (e.g., SkyLady Patcher_Main.esp) to prevent overwriting on subsequent runs.")]
-        public bool AppendSuffixToOutput { get; set; } = true;
-
-        [SynthesisSettingName("Output Filename Suffix")]
-        [SynthesisTooltip("Enter a custom suffix to append to the output filenames (e.g., 'Main' for SkyLady Patcher_Main.esp). Leave empty to use a timestamp (YYYYMMDD_HHmm).")]
-        public string OutputNameSuffix { get; set; } = "";
+        [SynthesisSettingName("NPCs with Locked Templates")]
+        [SynthesisTooltip("Specify NPCs whose templates should be locked. The patcher will automatically cache the last applied template for these NPCs and reuse it on subsequent runs.")]
+        public List<LockedNpcTemplate> LockedTemplates { get; set; } = [];
 
         [SynthesisSettingName("Template Mod Blacklist")]
         [SynthesisTooltip("Mods to exclude from template collection (e.g., mods with vanilla looks or .nif issues).")]
@@ -73,6 +77,18 @@ namespace SkyLady.SkyLady
         [SynthesisSettingName("NPCs to Exclude from Patching")]
         [SynthesisTooltip("Select individual NPCs to exclude from patching (e.g., unique NPCs you want to preserve).")]
         public List<IFormLinkGetter<INpcGetter>> NpcsToExcludeFromPatching { get; set; } = [];
+
+        [SynthesisSettingName("Flag Output Plugins as ESL")]
+        [SynthesisTooltip("If enabled, the output plugins will be flagged as ESL (Light Master) if they meet the eligibility criteria (max 2048 new records).")]
+        public bool FlagOutputAsEsl { get; set; } = false;
+
+        [SynthesisSettingName("Append Suffix to Output Filenames")]
+        [SynthesisTooltip("If enabled, the output plugins will have the specified suffix (or a timestamp if none is provided) appended to their filenames (e.g., SkyLady Patcher_Main.esp). If disabled, the default naming will be used (e.g., SkyLady Patcher.esp).")]
+        public bool AppendSuffixToOutput { get; set; } = false;
+
+        [SynthesisSettingName("Output Filename Suffix")]
+        [SynthesisTooltip("Enter a custom suffix to append to the output filenames (e.g., 'Main' for SkyLady Patcher_Main.esp). Leave empty to use a timestamp (YYYYMMDD_HHmm).")]
+        public string OutputNameSuffix { get; set; } = "";
 
         // Deprecated: Kept for backward compatibility, but hidden from GUI
         [SynthesisIgnoreSetting]
@@ -150,23 +166,84 @@ namespace SkyLady.SkyLady
 
         public static void Patch(IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
         {
-            // Use the settings from the Lazy variable
             var settings = Settings.Value;
-
             Console.WriteLine("SkyLady (Side) running on .NET 8.0...");
-            var racesPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyLady", "SkyLady races.txt");
-            var raceCompatibilityPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyLady", "SkyLady Race Compatibility.txt");
-            var partsToCopyPath = Path.Combine(state.DataFolderPath, "..", "..", "mods", "SkyLady", "SkyLady partsToCopy.txt");
+
+            // Dynamically locate the SkyLady mod folder by searching for SkyLadyKeywords.esp
+            var modsBasePath = Path.Combine(state.DataFolderPath, "..", "..", "mods");
+            if (!Directory.Exists(modsBasePath))
+            {
+                throw new Exception($"Cannot find mods directory at {modsBasePath}. Ensure the patcher is running in the correct environment.");
+            }
+
+            string? modFolderPath = null;
+            foreach (var dir in Directory.GetDirectories(modsBasePath))
+            {
+                var espPath = Path.Combine(dir, "SkyLadyKeywords.esp");
+                if (File.Exists(espPath))
+                {
+                    modFolderPath = dir;
+                    break;
+                }
+            }
+
+            if (modFolderPath == null)
+            {
+                throw new Exception("Cannot find SkyLady mod folder containing SkyLadyKeywords.esp. Ensure the mod is installed correctly.");
+            }
+
+            // Define paths using the dynamically located mod folder
+            var racesPath = Path.Combine(modFolderPath, "SkyLady races.txt");
+            var raceCompatibilityPath = Path.Combine(modFolderPath, "SkyLady Race Compatibility.txt");
+            var partsToCopyPath = Path.Combine(modFolderPath, "SkyLady partsToCopy.txt");
+            var tempTemplatesPath = Path.Combine(modFolderPath, "SkyLadyTempTemplates.json"); // Store in mod folder
             var humanoidRaces = new HashSet<string>(File.ReadAllLines(racesPath).Select(line => line.Trim()));
             var partsToCopy = File.ReadAllLines(partsToCopyPath).ToHashSet();
             HashSet<string> blacklistedMods = [.. settings.TemplateModBlacklist.Select(modKey => modKey.FileName.String)];
             var femaleTemplatesByRace = new Dictionary<string, List<INpcGetter>>();
             var successfulTemplatesByRace = new Dictionary<string, List<INpcGetter>>();
             var skippedTemplates = new Dictionary<string, (string ModName, string Reason)>();
-            var unpatchedNpcs = new Dictionary<string, string>(); // NPC ID -> Reason
-            var filteredNpcs = new Dictionary<string, string>(); // Filtered NPCs (Player/Presets)
-            var random = int.TryParse(settings.RandomSeed, out int seed) ? new Random(seed) : new Random();
-            Console.WriteLine($"Using random seed: {(settings.RandomSeed.Length > 0 ? settings.RandomSeed : "None (true randomness)")}");
+            var unpatchedNpcs = new Dictionary<string, string>();
+            var filteredNpcs = new Dictionary<string, string>();
+            var random = new Random();
+            var currentRunTemplates = new Dictionary<string, string>(); // Track all templates assigned in this run
+
+            // Load temporary templates from SkyLadyTempTemplates.json (all NPCs from last run)
+            Dictionary<string, string> tempTemplates;
+            if (File.Exists(tempTemplatesPath))
+            {
+                try
+                {
+                    var json = File.ReadAllText(tempTemplatesPath);
+                    tempTemplates = JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? [];
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error loading SkyLadyTempTemplates.json: {ex.Message}. Starting with an empty temp cache.");
+                    tempTemplates = [];
+                }
+            }
+            else
+            {
+                tempTemplates = [];
+            }
+
+            // Build a dictionary of locked NPCs for quick lookup
+            var lockedNpcs = settings.LockedTemplates
+                .Where(n => !n.Npc.IsNull)
+                .ToDictionary(n => n.Npc.FormKey, n => n);
+
+            // Update LockedTemplates with temp templates for display in the UI
+            foreach (var entry in lockedNpcs.Values)
+            {
+                if (entry.Template.IsNull && tempTemplates.TryGetValue(entry.Npc.FormKey.ToString(), out string? templateKey) && templateKey != null)
+                {
+                    if (FormKey.TryFactory(templateKey, out var templateFormKey))
+                    {
+                        entry.Template = new FormLink<INpcGetter>(templateFormKey);
+                    }
+                }
+            }
 
             // List to store file copy operations
             var fileCopyOperations = new List<(string SourcePath, string DestPath)>();
@@ -211,6 +288,7 @@ namespace SkyLady.SkyLady
                 .WinningOverrides()
                 .ToDictionary(n => n.FormKey, n => n);
 
+            // START OF SECTION 2
             // Race compatibility mapping - Load from SkyLady Race Compatibility.txt if it exists
             var raceCompatibilityMap = new Dictionary<string, List<string>>();
             if (File.Exists(raceCompatibilityPath))
@@ -257,37 +335,37 @@ namespace SkyLady.SkyLady
             {
                 Console.WriteLine("Using default race compatibility map.");
                 raceCompatibilityMap = new Dictionary<string, List<string>>
-                {
-                    { "NordRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
-                    { "NordRaceVampire", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
-                    { "HothRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
-                    { "ImperialRace", new List<string> { "ImperialRace", "ImperialRaceVampire", "NordRace", "NordRaceVampire", "HothRace" } },
-                    { "ImperialRaceVampire", new List<string> { "ImperialRace", "ImperialRaceVampire", "NordRace", "NordRaceVampire", "HothRace" } },
-                    { "DarkElfRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-                    { "DarkElfRaceVampire", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-                    { "_00DwemerRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-                    { "MASNerevarineRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-                    { "ArgonianRace", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
-                    { "ArgonianRaceVampire", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
-                    { "KhajiitRace", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
-                    { "KhajiitRaceVampire", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
-                    { "HighElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-                    { "HighElfRaceVampire", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-                    { "SnowElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-                    { "WB_ConjureCraftlord_Race", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-                    { "WoodElfRace", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
-                    { "WoodElfRaceVampire", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
-                    { "BretonRace", new List<string> { "BretonRace", "BretonRaceVampire" } },
-                    { "BretonRaceVampire", new List<string> { "BretonRace", "BretonRaceVampire" } },
-                    { "RedguardRace", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
-                    { "RedguardRaceVampire", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
-                    { "OrcRace", new List<string> { "OrcRace", "OrcRaceVampire" } },
-                    { "OrcRaceVampire", new List<string> { "OrcRace", "OrcRaceVampire" } },
-                    { "ElderRace", new List<string> { "ElderRace", "ElderRaceVampire" } },
-                    { "ElderRaceVampire", new List<string> { "ElderRace", "ElderRaceVampire" } },
-                    { "DremoraRace", new List<string> { "DremoraRace" } },
-                    { "DA13AfflictedRace", new List<string> { "DA13AfflictedRace" } }
-                };
+        {
+            { "NordRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
+            { "NordRaceVampire", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
+            { "HothRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
+            { "ImperialRace", new List<string> { "ImperialRace", "ImperialRaceVampire", "NordRace", "NordRaceVampire", "HothRace" } },
+            { "ImperialRaceVampire", new List<string> { "ImperialRace", "ImperialRaceVampire", "NordRace", "NordRaceVampire", "HothRace" } },
+            { "DarkElfRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+            { "DarkElfRaceVampire", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+            { "_00DwemerRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+            { "MASNerevarineRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+            { "ArgonianRace", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
+            { "ArgonianRaceVampire", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
+            { "KhajiitRace", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
+            { "KhajiitRaceVampire", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
+            { "HighElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+            { "HighElfRaceVampire", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+            { "SnowElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+            { "WB_ConjureCraftlord_Race", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+            { "WoodElfRace", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
+            { "WoodElfRaceVampire", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
+            { "BretonRace", new List<string> { "BretonRace", "BretonRaceVampire" } },
+            { "BretonRaceVampire", new List<string> { "BretonRace", "BretonRaceVampire" } },
+            { "RedguardRace", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
+            { "RedguardRaceVampire", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
+            { "OrcRace", new List<string> { "OrcRace", "OrcRaceVampire" } },
+            { "OrcRaceVampire", new List<string> { "OrcRace", "OrcRaceVampire" } },
+            { "ElderRace", new List<string> { "ElderRace", "ElderRaceVampire" } },
+            { "ElderRaceVampire", new List<string> { "ElderRace", "ElderRaceVampire" } },
+            { "DremoraRace", new List<string> { "DremoraRace" } },
+            { "DA13AfflictedRace", new List<string> { "DA13AfflictedRace" } }
+        };
             }
 
             // Validate race EditorIDs against the load order
@@ -401,7 +479,6 @@ namespace SkyLady.SkyLady
             int maleNpcCount = 0;
             int eligibleMaleNpcCount = 0; // Count of male NPCs eligible for patching (excludes blacklisted NPCs)
             int successfulPatches = 0;
-            int processedNpcs = 0; // Counter for periodic batching
             int skippedDueToPatch = 0; // Add counter for debugging
             int skippedDueToFilter = 0; // Add counter for debugging
             var blacklistedMaleNpcsByMod = new Dictionary<ModKey, int>(); // Track blacklisted male NPCs by mod
@@ -468,45 +545,130 @@ namespace SkyLady.SkyLady
                 Console.WriteLine($"Found {femaleTemplatesByRace[race].Count} female templates for race {race}");
             }
 
-            // Process selected NPCs if in single NPC mode
-            int totalSingleNpcs = 0; // Track total NPCs selected in single NPC mode
-            if (settings.PatchSingleNpcOnly)
+            int totalSingleNpcs = settings.NpcsToPatch.Count;
+            var patchedNpcs = new HashSet<FormKey>();
+
+            foreach (var npc in state.LoadOrder.PriorityOrder.Npc().WinningOverrides())
             {
-                totalSingleNpcs = settings.NpcsToPatch.Count;
-                if (totalSingleNpcs == 0)
+                if (patchedNpcs.Contains(npc.FormKey))
+                    continue;
+
+                if (npc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false)
                 {
-                    throw new Exception("No NPCs selected to patch. Please select at least one NPC in the settings.");
+                    skippedDueToPatch++;
+                    continue;
                 }
 
-                foreach (var npcEntry in settings.NpcsToPatch)
+                var isFemale = npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female);
+                var isPlayer = npc.EditorID?.Equals("Player", StringComparison.OrdinalIgnoreCase) ?? false;
+                var isPreset = npc.EditorID?.ToLowerInvariant().Contains("preset") ?? false;
+                var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
+
+                if (race == null || !humanoidRaces.Contains(race) || isFemale || isPlayer || isPreset)
                 {
-                    if (npcEntry.Npc.IsNull || !npcEntry.Npc.TryResolve(state.LinkCache, out var npc))
-                    {
-                        Console.WriteLine($"Failed to resolve NPC: {npcEntry.Npc.FormKey}. Skipping this entry.");
+                    skippedDueToFilter++;
+                    continue;
+                }
+
+                if (settings.PatchSingleNpcOnly)
+                {
+                    if (!settings.NpcsToPatch.Any(n => n.Npc.FormKey == npc.FormKey))
                         continue;
-                    }
-
-                    var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
-                    if (race == null || !humanoidRaces.Contains(race))
-                    {
-                        Console.WriteLine($"NPC {npc.EditorID ?? "Unnamed"} ({npc.FormKey.IDString()}) does not belong to a humanoid race: {race ?? "Unknown"}");
-                        unpatchedNpcs[npc.EditorID ?? "Unnamed" + " (" + npc.FormKey.IDString() + ")"] = $"Does not belong to a humanoid race: {race ?? "Unknown"}";
+                }
+                else
+                {
+                    if (!patchEntireLoadOrder && !requiemKeys.Contains(npc.FormKey.ModKey))
                         continue;
-                    }
+                }
 
-                    var npcFid = npc.FormKey.IDString();
+                if (settings.ModsToExcludeFromPatching.Contains(npc.FormKey.ModKey)) continue;
+                if (settings.NpcsToExcludeFromPatching.Any(ex => ex.FormKey == npc.FormKey)) continue;
 
-                    if (race == "DA13AfflictedRace")
-                    {
-                        Console.WriteLine($"Processing Afflicted NPC: {npc.EditorID ?? "Unnamed"} ({npcFid})");
-                    }
+                var npcFid = npc.FormKey.IDString();
+                if (race == "DA13AfflictedRace")
+                {
+                    Console.WriteLine($"Processing Afflicted NPC: {npc.EditorID ?? "Unnamed"} ({npcFid})");
+                }
 
-                    var compatibleRaces = raceCompatibilityMap.TryGetValue(race, out var races) ? races : [race];
-                    var templates = compatibleRaces
+                var compatibleRaces = raceCompatibilityMap.TryGetValue(race, out var races) ? races : [race];
+                var templates = compatibleRaces
+                    .SelectMany(r => femaleTemplatesByRace.TryGetValue(r, out var t) ? t : [])
+                    .ToList();
+
+                if (templates.Count == 0 && settings.UseDefaultRaceFallback)
+                {
+                    Console.WriteLine($"No templates found for race {race} for NPC {npc.EditorID ?? "Unnamed"} ({npc.FormKey}). Using default race fallback (NordRace, ImperialRace).");
+                    templates = new List<string> { "NordRace", "ImperialRace" }
                         .SelectMany(r => femaleTemplatesByRace.TryGetValue(r, out var t) ? t : [])
                         .ToList();
+                }
 
-                    if (templates.Count > 0)
+                if (templates.Count > 0)
+                {
+                    INpcGetter? template = null;
+                    bool useLockedTemplate = false;
+                    bool facegenCopied = false;
+                    Npc? patchedNpc = null;
+
+                    // Check temp template for locked NPCs
+                    if (lockedNpcs.TryGetValue(npc.FormKey, out var lockedEntry))
+                    {
+                        if (tempTemplates.TryGetValue(npc.FormKey.ToString(), out var tempTemplateKey)
+                            && FormKey.TryFactory(tempTemplateKey, out var tempFormKey)
+                            && state.LinkCache.TryResolve<INpcGetter>(tempFormKey, out var tempLockedTemplate))
+                        {
+                            var tempLockedTemplateRace = tempLockedTemplate.Race.TryResolve(state.LinkCache)?.EditorID;
+                            if (tempLockedTemplateRace != null && compatibleRaces.Contains(tempLockedTemplateRace))
+                            {
+                                template = tempLockedTemplate;
+                                useLockedTemplate = true;
+                                Console.WriteLine($"[Locked] Reusing temp template for {npc.EditorID ?? "Unnamed"}: {template.EditorID ?? "Unnamed"} ({template.FormKey}) from {template.FormKey.ModKey.FileName}");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"[Locked] Temp template {tempTemplateKey} is invalid for {npc.EditorID ?? "Unnamed"} (race {race}). Will assign new template now.");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[Locked] No valid temp template found for {npc.EditorID ?? "Unnamed"}. Will assign new template now.");
+                        }
+                    }
+
+                    // Delete old facegen
+                    DeleteExistingFacegenFiles(modFolderPath, npc.FormKey);
+
+                    // Patch NPC
+                    patchedNpc = state.PatchMod.Npcs.GetOrAddAsOverride(npc);
+                    if (patchedNpc == null)
+                    {
+                        Console.WriteLine($"Failed to create patched NPC for {npc.EditorID ?? "Unnamed"} ({npc.FormKey}) — GetOrAddAsOverride returned null");
+                        continue;
+                    }
+
+                    if (overrideCache.TryGetValue(npc.FormKey, out var cachedOverride) && !cachedOverride.Equals(patchedNpc))
+                    {
+                        patchedNpc.Configuration = cachedOverride.Configuration.DeepCopy();
+                        patchedNpc.Keywords = (cachedOverride.Keywords ?? []).ToExtendedList();
+                        if (patchedNpc.Items != null && cachedOverride.Items != null)
+                        {
+                            patchedNpc.Items.Clear();
+                            patchedNpc.Items.AddRange(cachedOverride.Items.Select(i => i.DeepCopy()));
+                        }
+                        patchedNpc.Packages.Clear();
+                        patchedNpc.Packages.AddRange(cachedOverride.Packages);
+                        if (patchedNpc.Perks != null && cachedOverride.Perks != null)
+                        {
+                            patchedNpc.Perks.Clear();
+                            patchedNpc.Perks.AddRange(cachedOverride.Perks.Select(p => p.DeepCopy()));
+                        }
+                        patchedNpc.Factions.Clear();
+                        if (cachedOverride.Factions != null)
+                            patchedNpc.Factions.AddRange(cachedOverride.Factions.Select(f => f.DeepCopy()));
+                    }
+
+                    // Template selection
+                    if (!useLockedTemplate)
                     {
                         var validTemplates = templates.ToList();
                         if (validTemplates.Count > 1)
@@ -514,124 +676,64 @@ namespace SkyLady.SkyLady
                             for (int i = validTemplates.Count - 1; i > 0; i--)
                             {
                                 int j = random.Next(i + 1);
-                                var temp = validTemplates[i];
-                                validTemplates[i] = validTemplates[j];
-                                validTemplates[j] = temp;
+                                (validTemplates[i], validTemplates[j]) = (validTemplates[j], validTemplates[i]);
                             }
                         }
-
-                        // Delete existing facegen files before patching
-                        DeleteExistingFacegenFiles("G:\\LoreRim\\mods\\SkyLady", npc.FormKey);
-
-                        var patchedNpc = state.PatchMod.Npcs.GetOrAddAsOverride(npc);
-
-                        var previousOverride = overrideCache.TryGetValue(npc.FormKey, out var cached) && !cached.Equals(patchedNpc) ? cached : null;
-                        if (previousOverride != null)
-                        {
-                            patchedNpc.Configuration.Level = previousOverride.Configuration.Level.DeepCopy();
-                            patchedNpc.Configuration.CalcMinLevel = previousOverride.Configuration.CalcMinLevel;
-                            patchedNpc.Configuration.CalcMaxLevel = previousOverride.Configuration.CalcMaxLevel;
-                            patchedNpc.Configuration.HealthOffset = previousOverride.Configuration.HealthOffset;
-                            patchedNpc.Configuration.MagickaOffset = previousOverride.Configuration.MagickaOffset;
-                            patchedNpc.Configuration.StaminaOffset = previousOverride.Configuration.StaminaOffset;
-                            patchedNpc.Configuration.DispositionBase = previousOverride.Configuration.DispositionBase;
-                            patchedNpc.Configuration.Flags = previousOverride.Configuration.Flags;
-
-                            patchedNpc.Keywords = (previousOverride.Keywords ?? []).ToExtendedList();
-
-                            patchedNpc.Items?.Clear();
-                            if (previousOverride.Items != null)
-                                patchedNpc.Items?.AddRange(previousOverride.Items.Select(i => i.DeepCopy()));
-
-                            patchedNpc.Packages.Clear();
-                            patchedNpc.Packages.AddRange(previousOverride.Packages);
-
-                            patchedNpc.Perks?.Clear();
-                            if (previousOverride.Perks != null)
-                                patchedNpc.Perks?.AddRange(previousOverride.Perks.Select(p => p.DeepCopy()));
-
-                            patchedNpc.Factions.Clear();
-                            if (previousOverride.Factions != null)
-                                patchedNpc.Factions.AddRange(previousOverride.Factions.Select(f => f.DeepCopy()));
-                        }
-
-                        INpcGetter? template = null;
-                        bool facegenCopied = false;
 
                         foreach (var candidate in validTemplates)
                         {
                             template = candidate;
                             var templateFid = template.FormKey.IDString();
                             var templateFileName = template.FormKey.ModKey.FileName.ToString();
-                            var templateNifPath = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", templateFileName, $"00{templateFid}.nif");
-                            var templateDdsPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", templateFileName, $"00{templateFid}.dds");
-
-                            var bsaPath = Path.Combine(state.DataFolderPath, templateFileName.Replace(".esm", ".bsa").Replace(".esp", ".bsa"));
                             var templateRace = template.Race.TryResolve(state.LinkCache)?.EditorID;
-                            if (File.Exists(bsaPath) || (blacklistedMods.Contains(templateFileName) && !(templateFileName.Equals("Skyrim.esm") && templateRace == "DA13AfflictedRace")))
+                            var bsaPath = Path.Combine(state.DataFolderPath, templateFileName.Replace(".esm", ".bsa").Replace(".esp", ".bsa"));
+
+                            if (File.Exists(bsaPath) || (blacklistedMods.Contains(templateFileName) &&
+                                !(templateFileName.Equals("Skyrim.esm") && templateRace == "DA13AfflictedRace")))
                             {
-                                Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({templateFid}) from {templateFileName} for NPC {npc.EditorID ?? "Unnamed"} - {(File.Exists(bsaPath) ? "mod uses a .bsa archive" : "mod is blacklisted")} and cannot be used as a template.");
-                                skippedTemplates[template.EditorID ?? "Unnamed"] = (templateFileName, File.Exists(bsaPath) ? "Mod uses a .bsa archive" : "Mod is blacklisted");
+                                Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({template.FormKey}) from {templateFileName} (BSA or blacklisted)");
                                 continue;
                             }
 
-                            if (partsToCopy.Contains("PNAM")) patchedNpc.HeadParts.SetTo(template.HeadParts);
-                            if (partsToCopy.Contains("WNAM")) patchedNpc.WornArmor.SetTo(template.WornArmor);
+                            // Apply template properties
+                            if (partsToCopy.Contains("PNAM") && template.HeadParts != null) patchedNpc.HeadParts.SetTo(template.HeadParts);
+                            if (partsToCopy.Contains("WNAM") && template.WornArmor != null) patchedNpc.WornArmor.SetTo(template.WornArmor);
                             if (partsToCopy.Contains("QNAM")) patchedNpc.TextureLighting = template.TextureLighting;
                             if (partsToCopy.Contains("NAM9") && template.FaceMorph != null) patchedNpc.FaceMorph = template.FaceMorph.DeepCopy();
-                            if (partsToCopy.Contains("NAMA")) patchedNpc.FaceParts = template.FaceParts?.DeepCopy();
+                            if (partsToCopy.Contains("NAMA") && template.FaceParts != null) patchedNpc.FaceParts = template.FaceParts.DeepCopy();
                             if (partsToCopy.Contains("Tint Layers") && template.TintLayers != null) patchedNpc.TintLayers.SetTo(template.TintLayers.Select(t => t.DeepCopy()));
-                            if (partsToCopy.Contains("FTST")) patchedNpc.HeadTexture.SetTo(template.HeadTexture);
-                            if (partsToCopy.Contains("HCLF")) patchedNpc.HairColor.SetTo(template.HairColor);
+                            if (partsToCopy.Contains("FTST") && template.HeadTexture != null) patchedNpc.HeadTexture.SetTo(template.HeadTexture);
+                            if (partsToCopy.Contains("HCLF") && template.HairColor != null) patchedNpc.HairColor.SetTo(template.HairColor);
 
                             patchedNpc.Configuration.Flags |= NpcConfiguration.Flag.Female;
 
+                            // Set voice
                             if (npc.Voice != null)
                             {
-                                var voiceTypeGetter = npc.Voice.TryResolve(state.LinkCache);
-                                var voiceType = voiceTypeGetter?.EditorID;
-                                if (voiceType != null)
+                                var voiceType = npc.Voice.TryResolve(state.LinkCache)?.EditorID;
+                                if (!string.IsNullOrEmpty(voiceType))
                                 {
-                                    // Check if the current voice type is already a female voice
                                     bool isFemaleVoice = voiceType.Contains("Female", StringComparison.OrdinalIgnoreCase) ||
-                                                         voiceTypeMap.Values.Any(v => v.Equals(voiceType, StringComparison.OrdinalIgnoreCase)) ||
-                                                         raceVoiceFallbacks.Values.Any(fallbacks => fallbacks.Contains(voiceType));
+                                                         voiceTypeMap.Values.Any(v => v.Equals(voiceType)) ||
+                                                         raceVoiceFallbacks.Values.Any(list => list.Contains(voiceType));
 
                                     if (!isFemaleVoice)
                                     {
-                                        if (voiceTypeMap.TryGetValue(voiceType, out var femaleVoiceType))
+                                        if (voiceTypeMap.TryGetValue(voiceType, out var femaleVoiceID))
                                         {
                                             var femaleVoice = state.LoadOrder.PriorityOrder.VoiceType().WinningOverrides()
-                                                .FirstOrDefault(vt => vt.EditorID == femaleVoiceType);
+                                                .FirstOrDefault(vt => vt.EditorID == femaleVoiceID);
                                             if (femaleVoice != null)
-                                            {
                                                 patchedNpc.Voice.SetTo(femaleVoice);
-                                                Console.WriteLine($"Swapped voice type for {npc.EditorID ?? "Unnamed"} from {voiceType} to {femaleVoiceType}");
-                                            }
                                         }
                                         else if (raceVoiceFallbacks.TryGetValue(race, out var fallbackVoices) && fallbackVoices.Count > 0)
                                         {
-                                            var selectedVoiceType = fallbackVoices[random.Next(fallbackVoices.Count)];
-                                            var fallbackVoice = state.LoadOrder.PriorityOrder.VoiceType().WinningOverrides()
-                                                .FirstOrDefault(vt => vt.EditorID == selectedVoiceType);
-                                            if (fallbackVoice != null)
-                                            {
-                                                patchedNpc.Voice.SetTo(fallbackVoice);
-                                                Console.WriteLine($"No female voice mapping for {voiceType} - used fallback {selectedVoiceType} for {npc.EditorID ?? "Unnamed"} (Race: {race})");
-                                            }
-                                            else
-                                            {
-                                                Console.WriteLine($"Failed to find fallback voice {selectedVoiceType} for {npc.EditorID ?? "Unnamed"} (Race: {race})");
-                                            }
+                                            var selectedVoice = fallbackVoices[random.Next(fallbackVoices.Count)];
+                                            var fallback = state.LoadOrder.PriorityOrder.VoiceType().WinningOverrides()
+                                                .FirstOrDefault(vt => vt.EditorID == selectedVoice);
+                                            if (fallback != null)
+                                                patchedNpc.Voice.SetTo(fallback);
                                         }
-                                        else
-                                        {
-                                            Console.WriteLine($"No fallback voices defined for race {race} for {npc.EditorID ?? "Unnamed"}");
-                                        }
-                                    }
-                                    else
-                                    {
-                                        Console.WriteLine($"NPC {npc.EditorID ?? "Unnamed"} already has a female voice ({voiceType}), skipping voice change.");
                                     }
                                 }
                             }
@@ -639,460 +741,168 @@ namespace SkyLady.SkyLady
                             patchedNpc.Height = template.Height != 0.0f ? template.Height : 1.0f;
                             patchedNpc.Weight = template.Weight != 0.0f ? template.Weight : 50.0f;
 
-                            var outputModFolder = "G:\\LoreRim\\mods\\SkyLady";
-                            var patchedNifPath = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", npc.FormKey.ModKey.FileName, $"00{npcFid}.nif");
-                            var patchedDdsPath = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", npc.FormKey.ModKey.FileName, $"00{npcFid}.dds");
-
-                            Console.WriteLine($"Checking facegen - Geom Src: {templateNifPath}, Exists: {facegenCache[(templateFileName, templateFid)].NifExists}");
-                            Console.WriteLine($"Checking facegen - Tint Src: {templateDdsPath}, Exists: {facegenCache[(templateFileName, templateFid)].DdsExists}");
-
-                            bool nifCopied = false, ddsCopied = false;
-                            var nifDir = Path.GetDirectoryName(patchedNifPath) ?? throw new InvalidOperationException("NIF path directory is null");
-                            var ddsDir = Path.GetDirectoryName(patchedDdsPath) ?? throw new InvalidOperationException("DDS path directory is null");
-
-                            if (templateFileName.Equals("Skyrim.esm") && templateRace == "DA13AfflictedRace")
-                            {
-                                Console.WriteLine($"Bypass triggered for template {template.EditorID ?? "Unnamed"} ({templateFid}) for NPC {npc.EditorID ?? "Unnamed"} ({npcFid})");
-                                Directory.CreateDirectory(nifDir);
-                                Directory.CreateDirectory(ddsDir);
-                                nifCopied = true;
-                                ddsCopied = true;
-                                Console.WriteLine($"Assumed facegen for template {template.EditorID ?? "Unnamed"} ({templateFid}) from Skyrim.esm for Afflicted template");
-                            }
-                            else
-                            {
-                                if (facegenCache[(templateFileName, templateFid)].NifExists)
-                                {
-                                    fileCopyOperations.Add((templateNifPath, patchedNifPath));
-                                    nifCopied = true;
-                                }
-                                else
-                                {
-                                    Console.WriteLine($"Warning: No facegen .nif found for template {template.EditorID ?? "Unnamed"} ({templateFid}) at {templateNifPath}");
-                                }
-
-                                if (facegenCache[(templateFileName, templateFid)].DdsExists)
-                                {
-                                    fileCopyOperations.Add((templateDdsPath, patchedDdsPath));
-                                    ddsCopied = true;
-                                }
-                                else
-                                {
-                                    Console.WriteLine($"Warning: No facegen .dds found for template {template.EditorID ?? "Unnamed"} ({templateFid}) at {templateDdsPath}");
-                                }
-                            }
-
-                            if (nifCopied && ddsCopied)
-                            {
-                                facegenCopied = true;
-                                successfulPatches++;
-                                if (!successfulTemplatesByRace.TryGetValue(race, out var templateList))
-                                {
-                                    templateList = [];
-                                    successfulTemplatesByRace[race] = templateList;
-                                }
-                                templateList.Add(template);
-
-                                // Add SkyLadyPatched keyword only if it doesn't already exist
-                                if (!(patchedNpc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false))
-                                {
-                                    patchedNpc.Keywords ??= [];
-                                    patchedNpc.Keywords.Add(SkyLadyPatched);
-                                    Console.WriteLine($"Added SkyLadyPatched keyword to {npc.EditorID ?? "Unnamed"}");
-                                }
-                                else
-                                {
-                                    Console.WriteLine($"NPC {npc.EditorID ?? "Unnamed"} already has SkyLadyPatched keyword, skipping addition.");
-                                }
-
-                                Console.WriteLine($"Patched NPC: {npc.EditorID ?? "Unnamed"} with {template.EditorID ?? "Unnamed"} (Race: {race})");
-                                break;
-                            }
-                        }
-                        // Single NPC Mode
-                        if (!facegenCopied)
-                        {
-                            if (successfulTemplatesByRace.TryGetValue(race, out var successfulTemplates) && successfulTemplates.Count > 0)
-                            {
-                                template = successfulTemplates[random.Next(successfulTemplates.Count)];
-                                var templateRace = template.Race.TryResolve(state.LinkCache)?.EditorID;
-                                var fallbackNifPath = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", template.FormKey.ModKey.FileName, $"00{template.FormKey.IDString()}.nif");
-                                var fallbackDdsPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", template.FormKey.ModKey.FileName, $"00{template.FormKey.IDString()}.dds");
-                                var outputModFolder = "G:\\LoreRim\\mods\\SkyLady";
-                                var patchedNifPath = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", npc.FormKey.ModKey.FileName, $"00{npcFid}.nif");
-                                var patchedDdsPath = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", npc.FormKey.ModKey.FileName, $"00{npcFid}.dds");
-                                var nifDir = Path.GetDirectoryName(patchedNifPath) ?? throw new InvalidOperationException("NIF path directory is null");
-                                var ddsDir = Path.GetDirectoryName(patchedDdsPath) ?? throw new InvalidOperationException("DDS path directory is null");
-
-                                if (template.FormKey.ModKey.FileName.Equals("Skyrim.esm") && templateRace == "DA13AfflictedRace")
-                                {
-                                    Directory.CreateDirectory(nifDir);
-                                    Directory.CreateDirectory(ddsDir);
-                                    successfulPatches++;
-                                    Console.WriteLine($"Patched NPC: {npc.EditorID ?? "Unnamed"} with Fallback Template {template.EditorID ?? "Unnamed"} (Race: {race}) - assumed facegen for Afflicted template");
-                                }
-                                else
-                                {
-                                    fileCopyOperations.Add((fallbackNifPath, patchedNifPath));
-                                    fileCopyOperations.Add((fallbackDdsPath, patchedDdsPath));
-                                    successfulPatches++;
-                                    Console.WriteLine($"Patched NPC: {npc.EditorID ?? "Unnamed"} with Fallback Template {template.EditorID ?? "Unnamed"} (Race: {race})");
-                                }
-
-                                // Add SkyLadyPatched keyword only if it doesn't already exist
-                                if (!(patchedNpc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false))
-                                {
-                                    patchedNpc.Keywords ??= [];
-                                    patchedNpc.Keywords.Add(SkyLadyPatched);
-                                    Console.WriteLine($"Added SkyLadyPatched keyword to {npc.EditorID ?? "Unnamed"}");
-                                }
-                                else
-                                {
-                                    Console.WriteLine($"NPC {npc.EditorID ?? "Unnamed"} already has SkyLadyPatched keyword, skipping addition.");
-                                }
-
-                                Console.WriteLine($"Patched NPC: {npc.EditorID ?? "Unnamed"} with Fallback Template {template.EditorID ?? "Unnamed"} (Race: {race})");
-                            }
-                            else
-                            {
-                                unpatchedNpcs[npc.EditorID ?? "Unnamed" + " (" + npcFid + ")"] = $"No valid templates or successful fallbacks for race {race}";
-                                Console.WriteLine($"Failed to patch {npc.EditorID ?? "Unnamed"} ({npcFid}) - no valid templates or successful fallbacks available for race {race}. NPC will remain unchanged.");
-                            }
-                        }
-                    }
-                }
-            }
-            else
-            {
-                // Normal mode: Patch male NPCs from target mods or entire load order
-                foreach (var npc in state.LoadOrder.PriorityOrder.Npc().WinningOverrides())
-                {
-                    var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
-                    if (race == null || !humanoidRaces.Contains(race) ||
-                        npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female) || // Skip females
-                        (!patchEntireLoadOrder && !requiemKeys.Contains(npc.FormKey.ModKey)) ||
-                        (npc.EditorID != null && (npc.EditorID.Equals("Player", StringComparison.OrdinalIgnoreCase) ||
-                                                  npc.EditorID.Contains("preset", StringComparison.OrdinalIgnoreCase))))
-                        continue;
-
-                    // Skip NPCs from excluded mods
-                    if (settings.ModsToExcludeFromPatching.Contains(npc.FormKey.ModKey))
-                    {
-                        Console.WriteLine($"Skipped NPC: {npc.EditorID ?? "Unnamed"} ({npc.FormKey.IDString()}) - mod {npc.FormKey.ModKey.FileName} is excluded from patching.");
-                        continue;
-                    }
-
-                    // Skip NPCs in the exclusion list
-                    if (settings.NpcsToExcludeFromPatching.Any(excludedNpc => excludedNpc.FormKey == npc.FormKey))
-                    {
-                        Console.WriteLine($"Skipped NPC: {npc.EditorID ?? "Unnamed"} ({npc.FormKey.IDString()}) - NPC is excluded from patching.");
-                        continue;
-                    }
-
-                    // Check if NPC has already been patched
-                    bool hasBeenPatched = npc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false;
-                    if (hasBeenPatched)
-                    {
-                        Console.WriteLine($"Skipped NPC: {npc.EditorID ?? "Unnamed"} ({npc.FormKey.IDString()}) - already patched by SkyLady");
-                        continue;
-                    }
-
-                    var npcFid = npc.FormKey.IDString();
-
-                    if (race == "DA13AfflictedRace")
-                    {
-                        Console.WriteLine($"Processing Afflicted NPC: {npc.EditorID ?? "Unnamed"} ({npcFid})");
-                    }
-
-                    var compatibleRaces = raceCompatibilityMap.TryGetValue(race, out var races) ? races : [race];
-                    var templates = compatibleRaces
-                        .SelectMany(r => femaleTemplatesByRace.TryGetValue(r, out var t) ? t : [])
-                        .ToList();
-
-                    if (templates.Count > 0)
-                    {
-                        var validTemplates = templates.ToList();
-                        if (validTemplates.Count > 1)
-                        {
-                            for (int i = validTemplates.Count - 1; i > 0; i--)
-                            {
-                                int j = random.Next(i + 1);
-                                var temp = validTemplates[i];
-                                validTemplates[i] = validTemplates[j];
-                                validTemplates[j] = temp;
-                            }
-                        }
-
-                        var patchedNpc = state.PatchMod.Npcs.GetOrAddAsOverride(npc);
-
-                        var previousOverride = overrideCache.TryGetValue(npc.FormKey, out var cached) && !cached.Equals(patchedNpc) ? cached : null;
-                        if (previousOverride != null)
-                        {
-                            patchedNpc.Configuration.Level = previousOverride.Configuration.Level.DeepCopy();
-                            patchedNpc.Configuration.CalcMinLevel = previousOverride.Configuration.CalcMinLevel;
-                            patchedNpc.Configuration.CalcMaxLevel = previousOverride.Configuration.CalcMaxLevel;
-                            patchedNpc.Configuration.HealthOffset = previousOverride.Configuration.HealthOffset;
-                            patchedNpc.Configuration.MagickaOffset = previousOverride.Configuration.MagickaOffset;
-                            patchedNpc.Configuration.StaminaOffset = previousOverride.Configuration.StaminaOffset;
-                            patchedNpc.Configuration.DispositionBase = previousOverride.Configuration.DispositionBase;
-                            patchedNpc.Configuration.Flags = previousOverride.Configuration.Flags;
-
-                            patchedNpc.Keywords = (previousOverride.Keywords ?? []).ToExtendedList();
-
-                            patchedNpc.Items?.Clear();
-                            if (previousOverride.Items != null)
-                                patchedNpc.Items?.AddRange(previousOverride.Items.Select(i => i.DeepCopy()));
-
-                            patchedNpc.Packages.Clear();
-                            patchedNpc.Packages.AddRange(previousOverride.Packages);
-
-                            patchedNpc.Perks?.Clear();
-                            if (previousOverride.Perks != null)
-                                patchedNpc.Perks?.AddRange(previousOverride.Perks.Select(p => p.DeepCopy()));
-
-                            patchedNpc.Factions.Clear();
-                            if (previousOverride.Factions != null)
-                                patchedNpc.Factions.AddRange(previousOverride.Factions.Select(f => f.DeepCopy()));
-                        }
-
-                        INpcGetter? template = null;
-                        bool facegenCopied = false;
-
-                        foreach (var candidate in validTemplates)
-                        {
-                            template = candidate;
-                            var templateFid = template.FormKey.IDString();
-                            var templateFileName = template.FormKey.ModKey.FileName.ToString();
-                            var templateNifPath = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", templateFileName, $"00{templateFid}.nif");
-                            var templateDdsPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", templateFileName, $"00{templateFid}.dds");
-
-                            var bsaPath = Path.Combine(state.DataFolderPath, templateFileName.Replace(".esm", ".bsa").Replace(".esp", ".bsa"));
-                            var templateRace = template.Race.TryResolve(state.LinkCache)?.EditorID;
-                            if (File.Exists(bsaPath) || (blacklistedMods.Contains(templateFileName) && !(templateFileName.Equals("Skyrim.esm") && templateRace == "DA13AfflictedRace")))
-                            {
-                                Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({templateFid}) from {templateFileName} for NPC {npc.EditorID ?? "Unnamed"} - {(File.Exists(bsaPath) ? "mod uses a .bsa archive" : "mod is blacklisted")} and cannot be used as a template.");
-                                skippedTemplates[template.EditorID ?? "Unnamed"] = (templateFileName, File.Exists(bsaPath) ? "Mod uses a .bsa archive" : "Mod is blacklisted");
-                                continue;
-                            }
-
-                            if (partsToCopy.Contains("PNAM")) patchedNpc.HeadParts.SetTo(template.HeadParts);
-                            if (partsToCopy.Contains("WNAM")) patchedNpc.WornArmor.SetTo(template.WornArmor);
-                            if (partsToCopy.Contains("QNAM")) patchedNpc.TextureLighting = template.TextureLighting;
-                            if (partsToCopy.Contains("NAM9") && template.FaceMorph != null) patchedNpc.FaceMorph = template.FaceMorph.DeepCopy();
-                            if (partsToCopy.Contains("NAMA")) patchedNpc.FaceParts = template.FaceParts?.DeepCopy();
-                            if (partsToCopy.Contains("Tint Layers") && template.TintLayers != null) patchedNpc.TintLayers.SetTo(template.TintLayers.Select(t => t.DeepCopy()));
-                            if (partsToCopy.Contains("FTST")) patchedNpc.HeadTexture.SetTo(template.HeadTexture);
-                            if (partsToCopy.Contains("HCLF")) patchedNpc.HairColor.SetTo(template.HairColor);
-
-                            patchedNpc.Configuration.Flags |= NpcConfiguration.Flag.Female;
-
-                            if (npc.Voice != null)
-                            {
-                                var voiceTypeGetter = npc.Voice.TryResolve(state.LinkCache);
-                                var voiceType = voiceTypeGetter?.EditorID;
-                                if (voiceType != null)
-                                {
-                                    // Check if the current voice type is already a female voice
-                                    bool isFemaleVoice = voiceType.Contains("Female", StringComparison.OrdinalIgnoreCase) ||
-                                                         voiceTypeMap.Values.Any(v => v.Equals(voiceType, StringComparison.OrdinalIgnoreCase)) ||
-                                                         raceVoiceFallbacks.Values.Any(fallbacks => fallbacks.Contains(voiceType));
-
-                                    if (!isFemaleVoice)
-                                    {
-                                        if (voiceTypeMap.TryGetValue(voiceType, out var femaleVoiceType))
-                                        {
-                                            var femaleVoice = state.LoadOrder.PriorityOrder.VoiceType().WinningOverrides()
-                                                .FirstOrDefault(vt => vt.EditorID == femaleVoiceType);
-                                            if (femaleVoice != null)
-                                            {
-                                                patchedNpc.Voice.SetTo(femaleVoice);
-                                                Console.WriteLine($"Swapped voice type for {npc.EditorID ?? "Unnamed"} from {voiceType} to {femaleVoiceType}");
-                                            }
-                                        }
-                                        else if (raceVoiceFallbacks.TryGetValue(race, out var fallbackVoices) && fallbackVoices.Count > 0)
-                                        {
-                                            var selectedVoiceType = fallbackVoices[random.Next(fallbackVoices.Count)];
-                                            var fallbackVoice = state.LoadOrder.PriorityOrder.VoiceType().WinningOverrides()
-                                                .FirstOrDefault(vt => vt.EditorID == selectedVoiceType);
-                                            if (fallbackVoice != null)
-                                            {
-                                                patchedNpc.Voice.SetTo(fallbackVoice);
-                                                Console.WriteLine($"No female voice mapping for {voiceType} - used fallback {selectedVoiceType} for {npc.EditorID ?? "Unnamed"} (Race: {race})");
-                                            }
-                                            else
-                                            {
-                                                Console.WriteLine($"Failed to find fallback voice {selectedVoiceType} for {npc.EditorID ?? "Unnamed"} (Race: {race})");
-                                            }
-                                        }
-                                        else
-                                        {
-                                            Console.WriteLine($"No fallback voices defined for race {race} for {npc.EditorID ?? "Unnamed"}");
-                                        }
-                                    }
-                                    else
-                                    {
-                                        Console.WriteLine($"NPC {npc.EditorID ?? "Unnamed"} already has a female voice ({voiceType}), skipping voice change.");
-                                    }
-                                }
-                            }
-
-                            patchedNpc.Height = template.Height != 0.0f ? template.Height : 1.0f;
-                            patchedNpc.Weight = template.Weight != 0.0f ? template.Weight : 50.0f;
-
-                            var outputModFolder = "G:\\LoreRim\\mods\\SkyLady";
-                            var patchedNifPath = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", npc.FormKey.ModKey.FileName, $"00{npcFid}.nif");
-                            var patchedDdsPath = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", npc.FormKey.ModKey.FileName, $"00{npcFid}.dds");
-
-                            Console.WriteLine($"Checking facegen - Geom Src: {templateNifPath}, Exists: {facegenCache[(templateFileName, templateFid)].NifExists}");
-                            Console.WriteLine($"Checking facegen - Tint Src: {templateDdsPath}, Exists: {facegenCache[(templateFileName, templateFid)].DdsExists}");
-
-                            bool nifCopied = false, ddsCopied = false;
-                            var nifDir = Path.GetDirectoryName(patchedNifPath) ?? throw new InvalidOperationException("NIF path directory is null");
-                            var ddsDir = Path.GetDirectoryName(patchedDdsPath) ?? throw new InvalidOperationException("DDS path directory is null");
-
-                            if (templateFileName.Equals("Skyrim.esm") && templateRace == "DA13AfflictedRace")
-                            {
-                                Console.WriteLine($"Bypass triggered for template {template.EditorID ?? "Unnamed"} ({templateFid}) for NPC {npc.EditorID ?? "Unnamed"} ({npcFid})");
-                                Directory.CreateDirectory(nifDir);
-                                Directory.CreateDirectory(ddsDir);
-                                nifCopied = true;
-                                ddsCopied = true;
-                                Console.WriteLine($"Assumed facegen for template {template.EditorID ?? "Unnamed"} ({templateFid}) from Skyrim.esm for Afflicted template");
-                            }
-                            else
-                            {
-                                if (facegenCache[(templateFileName, templateFid)].NifExists)
-                                {
-                                    fileCopyOperations.Add((templateNifPath, patchedNifPath));
-                                    nifCopied = true;
-                                }
-                                else
-                                {
-                                    Console.WriteLine($"Warning: No facegen .nif found for template {template.EditorID ?? "Unnamed"} ({templateFid}) at {templateNifPath}");
-                                }
-
-                                if (facegenCache[(templateFileName, templateFid)].DdsExists)
-                                {
-                                    fileCopyOperations.Add((templateDdsPath, patchedDdsPath));
-                                    ddsCopied = true;
-                                }
-                                else
-                                {
-                                    Console.WriteLine($"Warning: No facegen .dds found for template {template.EditorID ?? "Unnamed"} ({templateFid}) at {templateDdsPath}");
-                                }
-                            }
-
-                            if (nifCopied && ddsCopied)
-                            {
-                                facegenCopied = true;
-                                successfulPatches++;
-                                if (!successfulTemplatesByRace.TryGetValue(race, out var templateList))
-                                {
-                                    templateList = [];
-                                    successfulTemplatesByRace[race] = templateList;
-                                }
-                                templateList.Add(template);
-
-                                // Add SkyLadyPatched keyword only if it doesn't already exist
-                                if (!(patchedNpc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false))
-                                {
-                                    patchedNpc.Keywords ??= [];
-                                    patchedNpc.Keywords.Add(SkyLadyPatched);
-                                    Console.WriteLine($"Added SkyLadyPatched keyword to {npc.EditorID ?? "Unnamed"}");
-                                }
-                                else
-                                {
-                                    Console.WriteLine($"NPC {npc.EditorID ?? "Unnamed"} already has SkyLadyPatched keyword, skipping addition.");
-                                }
-
-                                Console.WriteLine($"Patched Male NPC: {npc.EditorID ?? "Unnamed"} with {template.EditorID ?? "Unnamed"} (Race: {race})");
-
-                                // Periodic batching: Copy files every 1,000 operations (500 NPCs)
-                                processedNpcs++;
-                                if (fileCopyOperations.Count >= 1000) // 1,000 operations = 500 NPCs (2 files per NPC)
-                                {
-                                    Console.WriteLine($"Performing batch file copy for {fileCopyOperations.Count} files...");
-                                    BatchCopyFiles(fileCopyOperations);
-                                    fileCopyOperations.Clear();
-                                }
-                                break;
-                            }
-                        }
-                        // Normal NPC mode
-                        if (!facegenCopied)
-                        {
-                            if (successfulTemplatesByRace.TryGetValue(race, out var successfulTemplates) && successfulTemplates.Count > 0)
-                            {
-                                template = successfulTemplates[random.Next(successfulTemplates.Count)];
-                                var templateRace = template.Race.TryResolve(state.LinkCache)?.EditorID;
-                                var fallbackNifPath = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", template.FormKey.ModKey.FileName, $"00{template.FormKey.IDString()}.nif");
-                                var fallbackDdsPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", template.FormKey.ModKey.FileName, $"00{template.FormKey.IDString()}.dds");
-                                var outputModFolder = "G:\\LoreRim\\mods\\SkyLady";
-                                var patchedNifPath = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", npc.FormKey.ModKey.FileName, $"00{npcFid}.nif");
-                                var patchedDdsPath = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", npc.FormKey.ModKey.FileName, $"00{npcFid}.dds");
-                                var nifDir = Path.GetDirectoryName(patchedNifPath) ?? throw new InvalidOperationException("NIF path directory is null");
-                                var ddsDir = Path.GetDirectoryName(patchedDdsPath) ?? throw new InvalidOperationException("DDS path directory is null");
-
-                                if (template.FormKey.ModKey.FileName.Equals("Skyrim.esm") && templateRace == "DA13AfflictedRace")
-                                {
-                                    Directory.CreateDirectory(nifDir);
-                                    Directory.CreateDirectory(ddsDir);
-                                    successfulPatches++;
-                                    Console.WriteLine($"Patched NPC: {npc.EditorID ?? "Unnamed"} with Fallback Template {template.EditorID ?? "Unnamed"} (Race: {race}) - assumed facegen for Afflicted template");
-                                }
-                                else
-                                {
-                                    fileCopyOperations.Add((fallbackNifPath, patchedNifPath));
-                                    fileCopyOperations.Add((fallbackDdsPath, patchedDdsPath));
-                                    successfulPatches++;
-                                    Console.WriteLine($"Patched NPC: {npc.EditorID ?? "Unnamed"} with Fallback Template {template.EditorID ?? "Unnamed"} (Race: {race})");
-                                }
-
-                                // Add SkyLadyPatched keyword only if it doesn't already exist
-                                if (!(patchedNpc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false))
-                                {
-                                    patchedNpc.Keywords ??= [];
-                                    patchedNpc.Keywords.Add(SkyLadyPatched);
-                                    Console.WriteLine($"Added SkyLadyPatched keyword to {npc.EditorID ?? "Unnamed"}");
-                                }
-                                else
-                                {
-                                    Console.WriteLine($"NPC {npc.EditorID ?? "Unnamed"} already has SkyLadyPatched keyword, skipping addition.");
-                                }
-
-                                Console.WriteLine($"Patched Male NPC: {npc.EditorID ?? "Unnamed"} with Fallback Template {template.EditorID ?? "Unnamed"} (Race: {race})");
-
-                                // Periodic batching: Copy files every 1,000 operations (500 NPCs)
-                                processedNpcs++;
-                                if (fileCopyOperations.Count >= 1000) // 1,000 operations = 500 NPCs (2 files per NPC)
-                                {
-                                    Console.WriteLine($"Performing batch file copy for {fileCopyOperations.Count} files...");
-                                    BatchCopyFiles(fileCopyOperations);
-                                    fileCopyOperations.Clear();
-                                }
-                            }
-                            else
-                            {
-                                unpatchedNpcs[npc.EditorID ?? "Unnamed" + " (" + npcFid + ")"] = $"No valid templates or successful fallbacks for race {race}";
-                                Console.WriteLine($"Failed to patch {npc.EditorID ?? "Unnamed"} ({npcFid}) - no valid templates or successful fallbacks available for race {race}. NPC will remain unchanged.");
-                                continue;
-                            }
+                            break;
                         }
                     }
                     else
                     {
-                        unpatchedNpcs[npc.EditorID ?? "Unnamed" + " (" + npcFid + ")"] = $"No female templates found for race {race}";
-                        Console.WriteLine($"No female templates found for race {race} for NPC {npc.EditorID ?? "Unnamed"} ({npcFid})");
+                        // Apply locked template properties
+                        if (template != null)
+                        {
+                            if (partsToCopy.Contains("PNAM") && template.HeadParts != null) patchedNpc.HeadParts.SetTo(template.HeadParts);
+                            if (partsToCopy.Contains("WNAM") && template.WornArmor != null) patchedNpc.WornArmor.SetTo(template.WornArmor);
+                            if (partsToCopy.Contains("QNAM")) patchedNpc.TextureLighting = template.TextureLighting;
+                            if (partsToCopy.Contains("NAM9") && template.FaceMorph != null) patchedNpc.FaceMorph = template.FaceMorph.DeepCopy();
+                            if (partsToCopy.Contains("NAMA") && template.FaceParts != null) patchedNpc.FaceParts = template.FaceParts.DeepCopy();
+                            if (partsToCopy.Contains("Tint Layers") && template.TintLayers != null) patchedNpc.TintLayers.SetTo(template.TintLayers.Select(t => t.DeepCopy()));
+                            if (partsToCopy.Contains("FTST") && template.HeadTexture != null) patchedNpc.HeadTexture.SetTo(template.HeadTexture);
+                            if (partsToCopy.Contains("HCLF") && template.HairColor != null) patchedNpc.HairColor.SetTo(template.HairColor);
+
+                            patchedNpc.Configuration.Flags |= NpcConfiguration.Flag.Female;
+
+                            if (npc.Voice != null)
+                            {
+                                var voiceType = npc.Voice.TryResolve(state.LinkCache)?.EditorID;
+                                if (!string.IsNullOrEmpty(voiceType))
+                                {
+                                    bool isFemaleVoice = voiceType.Contains("Female", StringComparison.OrdinalIgnoreCase) ||
+                                                         voiceTypeMap.Values.Any(v => v.Equals(voiceType)) ||
+                                                         raceVoiceFallbacks.Values.Any(list => list.Contains(voiceType));
+
+                                    if (!isFemaleVoice)
+                                    {
+                                        if (voiceTypeMap.TryGetValue(voiceType, out var femaleVoiceID))
+                                        {
+                                            var femaleVoice = state.LoadOrder.PriorityOrder.VoiceType().WinningOverrides()
+                                                .FirstOrDefault(vt => vt.EditorID == femaleVoiceID);
+                                            if (femaleVoice != null)
+                                                patchedNpc.Voice.SetTo(femaleVoice);
+                                        }
+                                        else if (raceVoiceFallbacks.TryGetValue(race, out var fallbackVoices) && fallbackVoices.Count > 0)
+                                        {
+                                            var selectedVoice = fallbackVoices[random.Next(fallbackVoices.Count)];
+                                            var fallback = state.LoadOrder.PriorityOrder.VoiceType().WinningOverrides()
+                                                .FirstOrDefault(vt => vt.EditorID == selectedVoice);
+                                            if (fallback != null)
+                                                patchedNpc.Voice.SetTo(fallback);
+                                        }
+                                    }
+                                }
+                            }
+
+                            patchedNpc.Height = template.Height != 0.0f ? template.Height : 1.0f;
+                            patchedNpc.Weight = template.Weight != 0.0f ? template.Weight : 50.0f;
+                        }
+                    }
+
+                    // Copy facegen for both locked and new templates
+                    if (template != null)
+                    {
+                        var templateFid = template.FormKey.IDString();
+                        var templateFileName = template.FormKey.ModKey.FileName.ToString();
+                        var templateRace = template.Race.TryResolve(state.LinkCache)?.EditorID;
+
+                        var patchedNif = Path.Combine(modFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", npc.FormKey.ModKey.FileName, $"00{npcFid}.nif");
+                        var patchedDds = Path.Combine(modFolderPath, "textures", "actors", "character", "facegendata", "facetint", npc.FormKey.ModKey.FileName, $"00{npcFid}.dds");
+                        var templateNif = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", templateFileName, $"00{templateFid}.nif");
+                        var templateDds = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", templateFileName, $"00{templateFid}.dds");
+
+                        bool nifExists = facegenCache[(templateFileName, templateFid)].NifExists;
+                        bool ddsExists = facegenCache[(templateFileName, templateFid)].DdsExists;
+
+                        if (templateFileName.Equals("Skyrim.esm") && templateRace == "DA13AfflictedRace")
+                        {
+                            var nifDir = Path.GetDirectoryName(patchedNif) ?? throw new InvalidOperationException("NIF path directory is null");
+                            var ddsDir = Path.GetDirectoryName(patchedDds) ?? throw new InvalidOperationException("DDS path directory is null");
+                            Directory.CreateDirectory(nifDir);
+                            Directory.CreateDirectory(ddsDir);
+                            facegenCopied = true;
+                            Console.WriteLine($"Assumed vanilla facegen for Afflicted template {template.EditorID ?? "Unnamed"} ({templateFid}) from {templateFileName}");
+                        }
+                        else if (nifExists && ddsExists)
+                        {
+                            fileCopyOperations.Add((templateNif, patchedNif));
+                            fileCopyOperations.Add((templateDds, patchedDds));
+                            facegenCopied = true;
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({template.FormKey}) from {templateFileName} — missing facegen files (.nif: {nifExists}, .dds: {ddsExists})");
+                            continue;
+                        }
+                    }
+
+                    if (facegenCopied)
+                    {
+                        successfulPatches++;
+                        patchedNpcs.Add(npc.FormKey);
+
+                        if (!(patchedNpc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false))
+                        {
+                            patchedNpc.Keywords ??= [];
+                            patchedNpc.Keywords.Add(SkyLadyPatched);
+                        }
+
+                        currentRunTemplates[npc.FormKey.ToString()] = template?.FormKey.ToString() ?? ""; // Store all assigned templates
+
+                        Console.WriteLine($"Patched: {npc.EditorID ?? "Unnamed"} ({npc.FormKey}) using {template?.EditorID ?? "Unknown"} from {template?.FormKey.ModKey.FileName}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Skipped: {npc.EditorID ?? "Unnamed"} ({npc.FormKey}) — no facegen copied");
                     }
                 }
             }
 
+            // START OF SECTION 5
             // Perform final batch copy for any remaining files
             if (fileCopyOperations.Count > 0)
             {
                 Console.WriteLine($"Performing final batch file copy for {fileCopyOperations.Count} files...");
                 BatchCopyFiles(fileCopyOperations);
                 fileCopyOperations.Clear();
+            }
+
+            // Save current run templates to SkyLadyTempTemplates.json
+            if (currentRunTemplates.Any())
+            {
+                try
+                {
+                    var directory = Path.GetDirectoryName(tempTemplatesPath) ?? throw new Exception("Cannot determine directory for SkyLadyTempTemplates.json.");
+                    Directory.CreateDirectory(directory);
+                    var json = JsonSerializer.Serialize(currentRunTemplates, new JsonSerializerOptions { WriteIndented = true });
+                    using (var stream = new FileStream(tempTemplatesPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    using (var writer = new StreamWriter(stream))
+                    {
+                        writer.Write(json);
+                    }
+                    Console.WriteLine($"Saved temporary templates to {tempTemplatesPath}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error saving SkyLadyTempTemplates.json: {ex.Message}");
+                }
+            }
+
+            // Save current run templates to SkyLadyTempTemplates.json
+            if (currentRunTemplates.Any())
+            {
+                try
+                {
+                    var directory = Path.GetDirectoryName(tempTemplatesPath) ?? throw new Exception("Cannot determine directory for SkyLadyTempTemplates.json.");
+                    Directory.CreateDirectory(directory);
+                    var json = JsonSerializer.Serialize(currentRunTemplates, new JsonSerializerOptions { WriteIndented = true });
+                    using (var stream = new FileStream(tempTemplatesPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    using (var writer = new StreamWriter(stream))
+                    {
+                        writer.Write(json);
+                    }
+                    Console.WriteLine($"Saved temporary templates to {tempTemplatesPath}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error saving SkyLadyTempTemplates.json: {ex.Message}");
+                }
             }
 
             if (skippedTemplates.Count != 0)
@@ -1147,70 +957,107 @@ namespace SkyLady.SkyLady
                 }
             }
 
+            // Add a small delay to ensure file handles are released before Synthesis writes the output
+            Thread.Sleep(5000);
+
             // Check if splitting is needed based on the number of masters
-            var masterCount = state.PatchMod.MasterReferences.Count;
+            var contributingMods = new HashSet<ModKey>();
+            foreach (var rec in state.PatchMod.EnumerateMajorRecords())
+            {
+                if (!rec.FormKey.ModKey.Equals(state.PatchMod.ModKey))
+                {
+                    contributingMods.Add(rec.FormKey.ModKey);
+                }
+            }
+            var masterCount = contributingMods.Count;
+            Console.WriteLine($"Calculated master count: {masterCount} (based on contributing mods)");
             if (masterCount <= 250)
             {
                 // No splitting needed; let Synthesis handle the output naturally
-                Console.WriteLine("No ESP splitting needed (master count ≤ 250). Letting Synthesis write the output ESP.");
+                Console.WriteLine("No ESP splitting needed (master count under 250). Letting Synthesis write the output ESP.");
 
-                // Check if the mod can be flagged as ESL if the user enabled the option
                 if (settings.FlagOutputAsEsl)
                 {
                     bool canBeEsl = true;
                     uint newRecordCount = 0;
 
-                    // Check all records in the mod
                     foreach (var rec in state.PatchMod.EnumerateMajorRecords())
                     {
-                        // Check if the record is new (created by this mod)
                         if (rec.FormKey.ModKey.Equals(state.PatchMod.ModKey))
                         {
                             newRecordCount++;
-                            // Check if the FormID is within the ESL range (0x800 to 0xFFF)
                             if (rec.FormKey.ID < 0x800 || rec.FormKey.ID > 0xFFF)
                             {
                                 canBeEsl = false;
-                                Console.WriteLine($"  Cannot flag output ESP as ESL: New record {rec.FormKey} has FormID outside ESL range (0x800 to 0xFFF).");
+                                Console.WriteLine($"Cannot flag output ESP as ESL: New record {rec.FormKey} has FormID outside ESL range (0x800 to 0xFFF).");
                                 break;
                             }
                         }
                     }
 
-                    // Check if the number of new records exceeds the ESL limit
                     if (newRecordCount > 2048)
                     {
                         canBeEsl = false;
-                        Console.WriteLine($"  Cannot flag output ESP as ESL: Exceeds 2048 new records (found {newRecordCount}).");
+                        Console.WriteLine($"Cannot flag output ESP as ESL: Exceeds 2048 new records (found {newRecordCount}).");
                     }
 
-                    // If eligible, set the ESL flag
                     if (canBeEsl)
                     {
                         state.PatchMod.ModHeader.Flags |= SkyrimModHeader.HeaderFlag.Small;
-                        Console.WriteLine($"  Flagged output ESP as ESL.");
+                        Console.WriteLine($"Flagged output ESP as ESL.");
                     }
                 }
 
-                // Synthesis will write the ESP based on the group name
                 var recordCount = state.PatchMod.EnumerateMajorRecords().Count();
                 Console.WriteLine($"Prepared single ESP for Synthesis output: Masters: {masterCount}, Records: {recordCount}");
             }
             else
             {
-                // Splitting is needed; use the MultiModFileSplitter
                 var splitter = new MultiModFileSplitter();
                 var splitMods = splitter.Split<ISkyrimMod, ISkyrimModGetter>(state.PatchMod, 250).ToList();
                 Console.WriteLine($"Split into {splitMods.Count} mods:");
 
-                // Ensure each split mod retains the master references from the original patch mod
                 foreach (var mod in splitMods)
                 {
                     mod.MasterReferences.Clear();
                     mod.MasterReferences.AddRange(state.PatchMod.MasterReferences.Select(m => m.DeepCopy()));
                 }
 
-                // Determine the suffix for renaming if enabled
+                if (settings.FlagOutputAsEsl)
+                {
+                    foreach (var mod in splitMods)
+                    {
+                        bool canBeEsl = true;
+                        uint newRecordCount = 0;
+
+                        foreach (var rec in mod.EnumerateMajorRecords())
+                        {
+                            if (rec.FormKey.ModKey.Equals(mod.ModKey))
+                            {
+                                newRecordCount++;
+                                if (rec.FormKey.ID < 0x800 || rec.FormKey.ID > 0xFFF)
+                                {
+                                    canBeEsl = false;
+                                    Console.WriteLine($"Cannot flag split ESP as ESL: New record {rec.FormKey} has FormID outside ESL range (0x800 to 0xFFF).");
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (newRecordCount > 2048)
+                        {
+                            canBeEsl = false;
+                            Console.WriteLine($"Cannot flag split ESP as ESL: Exceeds 2048 new records (found {newRecordCount}).");
+                        }
+
+                        if (canBeEsl)
+                        {
+                            mod.ModHeader.Flags |= SkyrimModHeader.HeaderFlag.Small;
+                            Console.WriteLine($"Flagged split ESP as ESL.");
+                        }
+                    }
+                }
+
                 string? suffix = null;
                 if (settings.AppendSuffixToOutput)
                 {
@@ -1224,8 +1071,7 @@ namespace SkyLady.SkyLady
                     var mod = splitMods[i];
                     var originalFileName = mod.ModKey.FileName.ToString();
 
-                    // Construct the output file path with suffix if enabled
-                    string outputFileName = originalFileName;
+                    string outputFileName;
                     if (suffix != null)
                     {
                         outputFileName = i == 0
@@ -1233,55 +1079,23 @@ namespace SkyLady.SkyLady
                             : $"SkyLady Patcher_{suffix}_{i}.esp";
                         Console.WriteLine($"Renaming output file from {originalFileName} to {outputFileName}");
                     }
+                    else
+                    {
+                        outputFileName = i == 0
+                            ? "SkyLady Patcher.esp"
+                            : $"SkyLady Patcher_{i + 1}.esp";
+                        Console.WriteLine($"Using Synthesis default naming: {outputFileName}");
+                    }
 
                     var splitMasterCount = mod.MasterReferences.Count;
                     var recordCount = mod.EnumerateMajorRecords().Count();
                     Console.WriteLine($"Mod {i}: {outputFileName}, Masters: {splitMasterCount}, Records: {recordCount}");
 
-                    // Check if the mod can be flagged as ESL if the user enabled the option
-                    if (settings.FlagOutputAsEsl)
-                    {
-                        bool canBeEsl = true;
-                        uint newRecordCount = 0;
-
-                        // Check all records in the mod
-                        foreach (var rec in mod.EnumerateMajorRecords())
-                        {
-                            // Check if the record is new (created by this mod)
-                            if (rec.FormKey.ModKey.Equals(mod.ModKey))
-                            {
-                                newRecordCount++;
-                                // Check if the FormID is within the ESL range (0x800 to 0xFFF)
-                                if (rec.FormKey.ID < 0x800 || rec.FormKey.ID > 0xFFF)
-                                {
-                                    canBeEsl = false;
-                                    Console.WriteLine($"  Cannot flag {outputFileName} as ESL: New record {rec.FormKey} has FormID outside ESL range (0x800 to 0xFFF).");
-                                    break;
-                                }
-                            }
-                        }
-
-                        // Check if the number of new records exceeds the ESL limit
-                        if (newRecordCount > 2048)
-                        {
-                            canBeEsl = false;
-                            Console.WriteLine($"  Cannot flag {outputFileName} as ESL: Exceeds 2048 new records (found {newRecordCount}).");
-                        }
-
-                        // If eligible, set the ESL flag
-                        if (canBeEsl)
-                        {
-                            mod.ModHeader.Flags |= SkyrimModHeader.HeaderFlag.Small;
-                            Console.WriteLine($"  Flagged {outputFileName} as ESL.");
-                        }
-                    }
-
                     mod.WriteToBinary(
                         Path.Combine(state.DataFolderPath, outputFileName),
                         new BinaryWriteParameters { ModKey = ModKeyOption.NoCheck });
                 }
-
-                // Throw a custom error to stop Synthesis gracefully due to too many masters
+                Console.WriteLine("Data Folder Path: " + state.DataFolderPath);
                 throw new Exception("This error indicates that the patcher ran successfully. The final ESP was split due to the 254-master limit. This error is intentional to prevent Synthesis from crashing and will be removed once ESP splitting is officially implemented in the Synthesis application.");
             }
         }
