@@ -47,19 +47,23 @@ namespace SkyLady.SkyLady
     public class PatcherSettings
     {
         [SynthesisSettingName("Patch Single NPC Only")]
-        [SynthesisTooltip("If enabled, the patcher will only process the NPCs selected below. If disabled, it will patch all male NPCs in the target mods or entire load order.")]
+        [SynthesisTooltip("If enabled, only selected NPCs from target mods receive new random templates, and non-selected NPCs preserve their last run appearances.")]
         public bool PatchSingleNpcOnly { get; set; } = false;
 
         [SynthesisSettingName("NPCs to Patch")]
-        [SynthesisTooltip("Select the NPCs to patch. Leave empty to patch all NPCs in the load order.")]
+        [SynthesisTooltip("Select NPCs to receive new random templates when 'Patch Single NPC Only' is enabled.")]
         public List<SkyLadyNpc> NpcsToPatch { get; set; } = [];
+
+        [SynthesisSettingName("Preserve Last Run Appearances")]
+        [SynthesisTooltip("If enabled in bulk mode, non-locked NPCs from target mods reuse their last run templates. In Single NPC mode, non-selected NPCs always preserve appearances.")]
+        public bool PreserveLastRunAppearances { get; set; } = false;
 
         [SynthesisSettingName("Use Default Race Fallback")]
         [SynthesisTooltip("If enabled, custom races with no female templates will use NordRace and ImperialRace templates as a fallback. If disabled, a matching race is required.")]
         public bool UseDefaultRaceFallback { get; set; } = false;
 
         [SynthesisSettingName("NPCs with Locked Templates")]
-        [SynthesisTooltip("Specify NPCs whose templates should be locked. The patcher will automatically cache the last applied template for these NPCs and reuse it on subsequent runs.")]
+        [SynthesisTooltip("Specify NPCs whose templates should be locked. The patcher will reuse the last applied template for these NPCs on subsequent runs.")]
         public List<LockedNpcTemplate> LockedTemplates { get; set; } = [];
 
         [SynthesisSettingName("Template Mod Blacklist")]
@@ -335,37 +339,37 @@ namespace SkyLady.SkyLady
             {
                 Console.WriteLine("Using default race compatibility map.");
                 raceCompatibilityMap = new Dictionary<string, List<string>>
-        {
-            { "NordRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
-            { "NordRaceVampire", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
-            { "HothRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
-            { "ImperialRace", new List<string> { "ImperialRace", "ImperialRaceVampire", "NordRace", "NordRaceVampire", "HothRace" } },
-            { "ImperialRaceVampire", new List<string> { "ImperialRace", "ImperialRaceVampire", "NordRace", "NordRaceVampire", "HothRace" } },
-            { "DarkElfRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-            { "DarkElfRaceVampire", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-            { "_00DwemerRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-            { "MASNerevarineRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-            { "ArgonianRace", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
-            { "ArgonianRaceVampire", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
-            { "KhajiitRace", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
-            { "KhajiitRaceVampire", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
-            { "HighElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-            { "HighElfRaceVampire", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-            { "SnowElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-            { "WB_ConjureCraftlord_Race", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-            { "WoodElfRace", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
-            { "WoodElfRaceVampire", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
-            { "BretonRace", new List<string> { "BretonRace", "BretonRaceVampire" } },
-            { "BretonRaceVampire", new List<string> { "BretonRace", "BretonRaceVampire" } },
-            { "RedguardRace", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
-            { "RedguardRaceVampire", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
-            { "OrcRace", new List<string> { "OrcRace", "OrcRaceVampire" } },
-            { "OrcRaceVampire", new List<string> { "OrcRace", "OrcRaceVampire" } },
-            { "ElderRace", new List<string> { "ElderRace", "ElderRaceVampire" } },
-            { "ElderRaceVampire", new List<string> { "ElderRace", "ElderRaceVampire" } },
-            { "DremoraRace", new List<string> { "DremoraRace" } },
-            { "DA13AfflictedRace", new List<string> { "DA13AfflictedRace" } }
-        };
+                {
+                    { "NordRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
+                    { "NordRaceVampire", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
+                    { "HothRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
+                    { "ImperialRace", new List<string> { "ImperialRace", "ImperialRaceVampire", "NordRace", "NordRaceVampire", "HothRace" } },
+                    { "ImperialRaceVampire", new List<string> { "ImperialRace", "ImperialRaceVampire", "NordRace", "NordRaceVampire", "HothRace" } },
+                    { "DarkElfRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+                    { "DarkElfRaceVampire", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+                    { "_00DwemerRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+                    { "MASNerevarineRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+                    { "ArgonianRace", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
+                    { "ArgonianRaceVampire", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
+                    { "KhajiitRace", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
+                    { "KhajiitRaceVampire", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
+                    { "HighElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+                    { "HighElfRaceVampire", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+                    { "SnowElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+                    { "WB_ConjureCraftlord_Race", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+                    { "WoodElfRace", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
+                    { "WoodElfRaceVampire", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
+                    { "BretonRace", new List<string> { "BretonRace", "BretonRaceVampire" } },
+                    { "BretonRaceVampire", new List<string> { "BretonRace", "BretonRaceVampire" } },
+                    { "RedguardRace", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
+                    { "RedguardRaceVampire", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
+                    { "OrcRace", new List<string> { "OrcRace", "OrcRaceVampire" } },
+                    { "OrcRaceVampire", new List<string> { "OrcRace", "OrcRaceVampire" } },
+                    { "ElderRace", new List<string> { "ElderRace", "ElderRaceVampire" } },
+                    { "ElderRaceVampire", new List<string> { "ElderRace", "ElderRaceVampire" } },
+                    { "DremoraRace", new List<string> { "DremoraRace" } },
+                    { "DA13AfflictedRace", new List<string> { "DA13AfflictedRace" } }
+                };
             }
 
             // Validate race EditorIDs against the load order
@@ -545,6 +549,7 @@ namespace SkyLady.SkyLady
                 Console.WriteLine($"Found {femaleTemplatesByRace[race].Count} female templates for race {race}");
             }
 
+            // SECTION 3 and 4: Unified NPC patching loop
             int totalSingleNpcs = settings.NpcsToPatch.Count;
             var patchedNpcs = new HashSet<FormKey>();
 
@@ -570,15 +575,24 @@ namespace SkyLady.SkyLady
                     continue;
                 }
 
+                // Apply filtering based on settings
+                bool shouldPatchNew = true;
+                if (!patchEntireLoadOrder && !requiemKeys.Contains(npc.FormKey.ModKey))
+                    continue; // Skip NPCs from non-targeted mods in both modes
+
                 if (settings.PatchSingleNpcOnly)
                 {
                     if (!settings.NpcsToPatch.Any(n => n.Npc.FormKey == npc.FormKey))
-                        continue;
+                    {
+                        shouldPatchNew = false; // Preserve non-selected NPCs in single NPC mode
+                    }
                 }
                 else
                 {
-                    if (!patchEntireLoadOrder && !requiemKeys.Contains(npc.FormKey.ModKey))
-                        continue;
+                    if (settings.PreserveLastRunAppearances)
+                    {
+                        shouldPatchNew = false; // Preserve in bulk mode if enabled
+                    }
                 }
 
                 if (settings.ModsToExcludeFromPatching.Contains(npc.FormKey.ModKey)) continue;
@@ -610,8 +624,8 @@ namespace SkyLady.SkyLady
                     bool facegenCopied = false;
                     Npc? patchedNpc = null;
 
-                    // Check temp template for locked NPCs
-                    if (lockedNpcs.TryGetValue(npc.FormKey, out var lockedEntry))
+                    // Check for locked NPCs or preserved appearances
+                    if (lockedNpcs.TryGetValue(npc.FormKey, out var lockedEntry) || !shouldPatchNew)
                     {
                         if (tempTemplates.TryGetValue(npc.FormKey.ToString(), out var tempTemplateKey)
                             && FormKey.TryFactory(tempTemplateKey, out var tempFormKey)
@@ -622,16 +636,16 @@ namespace SkyLady.SkyLady
                             {
                                 template = tempLockedTemplate;
                                 useLockedTemplate = true;
-                                Console.WriteLine($"[Locked] Reusing temp template for {npc.EditorID ?? "Unnamed"}: {template.EditorID ?? "Unnamed"} ({template.FormKey}) from {template.FormKey.ModKey.FileName}");
+                                Console.WriteLine($"[{(lockedNpcs.ContainsKey(npc.FormKey) ? "Locked" : "Preserved")}] Reusing temp template for {npc.EditorID ?? "Unnamed"}: {template.EditorID ?? "Unnamed"} ({template.FormKey}) from {template.FormKey.ModKey.FileName}");
                             }
                             else
                             {
-                                Console.WriteLine($"[Locked] Temp template {tempTemplateKey} is invalid for {npc.EditorID ?? "Unnamed"} (race {race}). Will assign new template now.");
+                                Console.WriteLine($"[{(lockedNpcs.ContainsKey(npc.FormKey) ? "Locked" : "Preserved")}] Temp template {tempTemplateKey} is invalid for {npc.EditorID ?? "Unnamed"} (race {race}). Will assign new template now.");
                             }
                         }
                         else
                         {
-                            Console.WriteLine($"[Locked] No valid temp template found for {npc.EditorID ?? "Unnamed"}. Will assign new template now.");
+                            Console.WriteLine($"[{(lockedNpcs.ContainsKey(npc.FormKey) ? "Locked" : "Preserved")}] No valid temp template found for {npc.EditorID ?? "Unnamed"}. Will assign new template now.");
                         }
                     }
 
@@ -746,7 +760,7 @@ namespace SkyLady.SkyLady
                     }
                     else
                     {
-                        // Apply locked template properties
+                        // Apply locked or preserved template properties
                         if (template != null)
                         {
                             if (partsToCopy.Contains("PNAM") && template.HeadParts != null) patchedNpc.HeadParts.SetTo(template.HeadParts);
@@ -843,8 +857,7 @@ namespace SkyLady.SkyLady
                             patchedNpc.Keywords.Add(SkyLadyPatched);
                         }
 
-                        currentRunTemplates[npc.FormKey.ToString()] = template?.FormKey.ToString() ?? ""; // Store all assigned templates
-
+                        currentRunTemplates[npc.FormKey.ToString()] = template?.FormKey.ToString() ?? "";
                         Console.WriteLine($"Patched: {npc.EditorID ?? "Unnamed"} ({npc.FormKey}) using {template?.EditorID ?? "Unknown"} from {template?.FormKey.ModKey.FileName}");
                     }
                     else
@@ -861,27 +874,6 @@ namespace SkyLady.SkyLady
                 Console.WriteLine($"Performing final batch file copy for {fileCopyOperations.Count} files...");
                 BatchCopyFiles(fileCopyOperations);
                 fileCopyOperations.Clear();
-            }
-
-            // Save current run templates to SkyLadyTempTemplates.json
-            if (currentRunTemplates.Any())
-            {
-                try
-                {
-                    var directory = Path.GetDirectoryName(tempTemplatesPath) ?? throw new Exception("Cannot determine directory for SkyLadyTempTemplates.json.");
-                    Directory.CreateDirectory(directory);
-                    var json = JsonSerializer.Serialize(currentRunTemplates, new JsonSerializerOptions { WriteIndented = true });
-                    using (var stream = new FileStream(tempTemplatesPath, FileMode.Create, FileAccess.Write, FileShare.None))
-                    using (var writer = new StreamWriter(stream))
-                    {
-                        writer.Write(json);
-                    }
-                    Console.WriteLine($"Saved temporary templates to {tempTemplatesPath}");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error saving SkyLadyTempTemplates.json: {ex.Message}");
-                }
             }
 
             // Save current run templates to SkyLadyTempTemplates.json
