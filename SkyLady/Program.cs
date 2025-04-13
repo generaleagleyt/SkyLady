@@ -30,7 +30,7 @@ namespace SkyLady.SkyLady
     public class LockedNpcTemplate
     {
         [SynthesisOrder]
-        [SynthesisTooltip("The NPC whose template should be locked. Search and select an NPC to lock its template.")]
+        [SynthesisTooltip("Select NPCs to lock their current templates, ensuring the patcher reuses them in future runs.")]
         public IFormLinkGetter<INpcGetter> Npc { get; set; } = FormLink<INpcGetter>.Null;
 
         [SynthesisIgnoreSetting]
@@ -47,7 +47,7 @@ namespace SkyLady.SkyLady
     public class PatcherSettings
     {
         [SynthesisSettingName("Patch Single NPC Only")]
-        [SynthesisTooltip("If enabled, only selected NPCs from target mods receive new random templates, and non-selected NPCs preserve their last run appearances.")]
+        [SynthesisTooltip("If enabled, only selected NPCs from target mods get new random templates. Non-selected NPCs preserve their last run appearances and are skipped if previously patched with SkyLadyKeywords.esp.")]
         public bool PatchSingleNpcOnly { get; set; } = false;
 
         [SynthesisSettingName("NPCs to Patch")]
@@ -55,7 +55,7 @@ namespace SkyLady.SkyLady
         public List<SkyLadyNpc> NpcsToPatch { get; set; } = [];
 
         [SynthesisSettingName("Preserve Last Run Appearances")]
-        [SynthesisTooltip("If enabled in bulk mode, non-locked NPCs from target mods reuse their last run templates. In Single NPC mode, non-selected NPCs always preserve appearances.")]
+        [SynthesisTooltip("In bulk mode, enables non-locked NPCs to reuse last run templates. In Single NPC mode, non-selected NPCs always preserve appearances.")]
         public bool PreserveLastRunAppearances { get; set; } = false;
 
         [SynthesisSettingName("Use Default Race Fallback")]
@@ -63,11 +63,11 @@ namespace SkyLady.SkyLady
         public bool UseDefaultRaceFallback { get; set; } = false;
 
         [SynthesisSettingName("NPCs with Locked Templates")]
-        [SynthesisTooltip("Specify NPCs whose templates should be locked. The patcher will reuse the last applied template for these NPCs on subsequent runs.")]
+        [SynthesisTooltip("Select NPCs to lock their current templates, ensuring the patcher reuses them in future runs.")]
         public List<LockedNpcTemplate> LockedTemplates { get; set; } = [];
 
         [SynthesisSettingName("Template Mod Blacklist")]
-        [SynthesisTooltip("Mods to exclude from template collection (e.g., mods with vanilla looks or .nif issues).")]
+        [SynthesisTooltip("Mods to exclude from template collection (e.g., Skyrim.esm for modded setups to avoid vanilla looks). Vanilla mods like Skyrim.esm are included by default.")]
         public HashSet<ModKey> TemplateModBlacklist { get; set; } = [];
 
         [SynthesisSettingName("Target Mods to Patch")]
@@ -75,23 +75,23 @@ namespace SkyLady.SkyLady
         public HashSet<ModKey> TargetModsToPatch { get; set; } = [];
 
         [SynthesisSettingName("Mods to Exclude from Patching")]
-        [SynthesisTooltip("Select mods to exclude from patching (e.g., mods with unique NPCs you want to preserve).")]
+        [SynthesisTooltip("Select mods to skip patching (e.g., mods with unique NPCs or custom appearances to preserve).")]
         public HashSet<ModKey> ModsToExcludeFromPatching { get; set; } = [];
 
         [SynthesisSettingName("NPCs to Exclude from Patching")]
-        [SynthesisTooltip("Select individual NPCs to exclude from patching (e.g., unique NPCs you want to preserve).")]
+        [SynthesisTooltip("Select specific NPCs to skip patching (e.g., unique NPCs or those with custom appearances to preserve).")]
         public List<IFormLinkGetter<INpcGetter>> NpcsToExcludeFromPatching { get; set; } = [];
 
         [SynthesisSettingName("Flag Output Plugins as ESL")]
-        [SynthesisTooltip("If enabled, the output plugins will be flagged as ESL (Light Master) if they meet the eligibility criteria (max 2048 new records).")]
+        [SynthesisTooltip("If enabled, output plugins are flagged as ESL (Light Master) if they have 2048 or fewer new records.")]
         public bool FlagOutputAsEsl { get; set; } = false;
 
         [SynthesisSettingName("Append Suffix to Output Filenames")]
-        [SynthesisTooltip("If enabled, the output plugins will have the specified suffix (or a timestamp if none is provided) appended to their filenames (e.g., SkyLady Patcher_Main.esp). If disabled, the default naming will be used (e.g., SkyLady Patcher.esp).")]
+        [SynthesisTooltip("If enabled, adds a suffix to output plugins (e.g., SkyLady Patcher_Main.esp) for multi-ESP setups. Requires SkyLadyKeywords.esp.")]
         public bool AppendSuffixToOutput { get; set; } = false;
 
         [SynthesisSettingName("Output Filename Suffix")]
-        [SynthesisTooltip("Enter a custom suffix to append to the output filenames (e.g., 'Main' for SkyLady Patcher_Main.esp). Leave empty to use a timestamp (YYYYMMDD_HHmm).")]
+        [SynthesisTooltip("Enter a custom suffix for output filenames (e.g., 'Main' for SkyLady Patcher_Main.esp). Leave empty for a timestamp (YYYYMMDD_HHmm).")]
         public string OutputNameSuffix { get; set; } = "";
 
         // Deprecated: Kept for backward compatibility, but hidden from GUI
@@ -102,7 +102,6 @@ namespace SkyLady.SkyLady
     public class Program
     {
         private static readonly char[] LineSeparators = ['\n', '\r'];
-        private static readonly FormKey SkyLadyPatched = FormKey.Factory("000800:SkyLadyKeywords.esp");
 
         // Define a variable to hold the settings
         static Lazy<PatcherSettings> Settings = null!;
@@ -111,7 +110,6 @@ namespace SkyLady.SkyLady
         {
             return await SynthesisPipeline.Instance
                 .AddPatch<ISkyrimMod, ISkyrimModGetter>(Patch)
-                // Register the settings class and specify the settings file path
                 .SetAutogeneratedSettings(
                     nickname: "Settings",
                     path: "settings.json",
@@ -125,13 +123,11 @@ namespace SkyLady.SkyLady
         {
             if (fileCopyOperations.Count == 0) return;
 
-            // Extract unique destination directories
             var directories = fileCopyOperations
                 .Select(op => Path.GetDirectoryName(op.DestPath))
                 .Distinct()
                 .ToList();
 
-            // Create all directories
             foreach (var dir in directories)
             {
                 if (dir != null)
@@ -140,7 +136,6 @@ namespace SkyLady.SkyLady
                 }
             }
 
-            // Copy all files
             foreach (var (sourcePath, destPath) in fileCopyOperations)
             {
                 File.Copy(sourcePath, destPath, true);
@@ -173,7 +168,7 @@ namespace SkyLady.SkyLady
             var settings = Settings.Value;
             Console.WriteLine("SkyLady (Side) running on .NET 8.0...");
 
-            // Dynamically locate the SkyLady mod folder by searching for SkyLadyKeywords.esp
+            // Dynamically locate the SkyLady mod folder by searching for SkyLady races.txt
             var modsBasePath = Path.Combine(state.DataFolderPath, "..", "..", "mods");
             if (!Directory.Exists(modsBasePath))
             {
@@ -183,8 +178,8 @@ namespace SkyLady.SkyLady
             string? modFolderPath = null;
             foreach (var dir in Directory.GetDirectories(modsBasePath))
             {
-                var espPath = Path.Combine(dir, "SkyLadyKeywords.esp");
-                if (File.Exists(espPath))
+                var txtPath = Path.Combine(dir, "SkyLady races.txt");
+                if (File.Exists(txtPath))
                 {
                     modFolderPath = dir;
                     break;
@@ -193,14 +188,35 @@ namespace SkyLady.SkyLady
 
             if (modFolderPath == null)
             {
-                throw new Exception("Cannot find SkyLady mod folder containing SkyLadyKeywords.esp. Ensure the mod is installed correctly.");
+                throw new Exception("Cannot find SkyLady mod folder containing SkyLady races.txt. Ensure the mod is installed correctly.");
+            }
+
+            // Check for SkyLadyKeywords.esp if AppendSuffixToOutput is enabled
+            bool useKeywords = false;
+            FormKey? skyLadyPatched = null;
+            if (settings.AppendSuffixToOutput)
+            {
+                foreach (var dir in Directory.GetDirectories(modsBasePath))
+                {
+                    var espPath = Path.Combine(dir, "SkyLadyKeywords.esp");
+                    if (File.Exists(espPath))
+                    {
+                        useKeywords = true;
+                        skyLadyPatched = FormKey.Factory("000800:SkyLadyKeywords.esp");
+                        break;
+                    }
+                }
+                if (!useKeywords)
+                {
+                    throw new Exception("Append Suffix to Output Filenames requires SkyLadyKeywords.esp for multi-ESP tracking. Please download and install SkyLadyKeywords.esp.");
+                }
             }
 
             // Define paths using the dynamically located mod folder
             var racesPath = Path.Combine(modFolderPath, "SkyLady races.txt");
             var raceCompatibilityPath = Path.Combine(modFolderPath, "SkyLady Race Compatibility.txt");
             var partsToCopyPath = Path.Combine(modFolderPath, "SkyLady partsToCopy.txt");
-            var tempTemplatesPath = Path.Combine(modFolderPath, "SkyLadyTempTemplates.json"); // Store in mod folder
+            var tempTemplatesPath = Path.Combine(modFolderPath, "SkyLadyTempTemplates.json");
             var humanoidRaces = new HashSet<string>(File.ReadAllLines(racesPath).Select(line => line.Trim()));
             var partsToCopy = File.ReadAllLines(partsToCopyPath).ToHashSet();
             HashSet<string> blacklistedMods = [.. settings.TemplateModBlacklist.Select(modKey => modKey.FileName.String)];
@@ -240,7 +256,7 @@ namespace SkyLady.SkyLady
             // Update LockedTemplates with temp templates for display in the UI
             foreach (var entry in lockedNpcs.Values)
             {
-                if (entry.Template.IsNull && tempTemplates.TryGetValue(entry.Npc.FormKey.ToString(), out string? templateKey) && templateKey != null)
+                if (entry.Template.IsNull && tempTemplates.TryGetValue(entry.Npc.FormKey.ToString(), out var templateKey) && templateKey != null)
                 {
                     if (FormKey.TryFactory(templateKey, out var templateFormKey))
                     {
@@ -272,7 +288,7 @@ namespace SkyLady.SkyLady
             // Cache facegen file existence for NPCs with humanoid races only
             Console.WriteLine("Caching facegen file existence...");
             var facegenCache = new Dictionary<(string ModKey, string FormID), (bool NifExists, bool DdsExists)>();
-            foreach (var npc in state.LoadOrder.PriorityOrder.Npc().WinningOverrides())
+            foreach (var npc in state.LoadOrder.PriorityOrder.WinningOverrides<INpcGetter>())
             {
                 var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
                 if (race != null && humanoidRaces.Contains(race))
@@ -288,8 +304,7 @@ namespace SkyLady.SkyLady
 
             // Cache all NPC overrides
             Console.WriteLine("Building NPC override cache...");
-            var overrideCache = state.LoadOrder.PriorityOrder.Npc()
-                .WinningOverrides()
+            var overrideCache = state.LoadOrder.PriorityOrder.WinningOverrides<INpcGetter>()
                 .ToDictionary(n => n.FormKey, n => n);
 
             // START OF SECTION 2
@@ -303,7 +318,7 @@ namespace SkyLady.SkyLady
                     foreach (var line in lines)
                     {
                         var trimmedLine = line.Trim();
-                        if (string.IsNullOrEmpty(trimmedLine) || trimmedLine.StartsWith("#")) continue; // Skip empty lines or comments
+                        if (string.IsNullOrEmpty(trimmedLine) || trimmedLine.StartsWith("#")) continue;
 
                         var parts = trimmedLine.Split(':');
                         if (parts.Length != 2)
@@ -339,37 +354,37 @@ namespace SkyLady.SkyLady
             {
                 Console.WriteLine("Using default race compatibility map.");
                 raceCompatibilityMap = new Dictionary<string, List<string>>
-                {
-                    { "NordRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
-                    { "NordRaceVampire", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
-                    { "HothRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
-                    { "ImperialRace", new List<string> { "ImperialRace", "ImperialRaceVampire", "NordRace", "NordRaceVampire", "HothRace" } },
-                    { "ImperialRaceVampire", new List<string> { "ImperialRace", "ImperialRaceVampire", "NordRace", "NordRaceVampire", "HothRace" } },
-                    { "DarkElfRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-                    { "DarkElfRaceVampire", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-                    { "_00DwemerRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-                    { "MASNerevarineRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-                    { "ArgonianRace", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
-                    { "ArgonianRaceVampire", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
-                    { "KhajiitRace", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
-                    { "KhajiitRaceVampire", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
-                    { "HighElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-                    { "HighElfRaceVampire", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-                    { "SnowElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-                    { "WB_ConjureCraftlord_Race", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-                    { "WoodElfRace", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
-                    { "WoodElfRaceVampire", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
-                    { "BretonRace", new List<string> { "BretonRace", "BretonRaceVampire" } },
-                    { "BretonRaceVampire", new List<string> { "BretonRace", "BretonRaceVampire" } },
-                    { "RedguardRace", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
-                    { "RedguardRaceVampire", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
-                    { "OrcRace", new List<string> { "OrcRace", "OrcRaceVampire" } },
-                    { "OrcRaceVampire", new List<string> { "OrcRace", "OrcRaceVampire" } },
-                    { "ElderRace", new List<string> { "ElderRace", "ElderRaceVampire" } },
-                    { "ElderRaceVampire", new List<string> { "ElderRace", "ElderRaceVampire" } },
-                    { "DremoraRace", new List<string> { "DremoraRace" } },
-                    { "DA13AfflictedRace", new List<string> { "DA13AfflictedRace" } }
-                };
+    {
+        { "NordRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
+        { "NordRaceVampire", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
+        { "HothRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
+        { "ImperialRace", new List<string> { "ImperialRace", "ImperialRaceVampire", "NordRace", "NordRaceVampire", "HothRace" } },
+        { "ImperialRaceVampire", new List<string> { "ImperialRace", "ImperialRaceVampire", "NordRace", "NordRaceVampire", "HothRace" } },
+        { "DarkElfRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+        { "DarkElfRaceVampire", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+        { "_00DwemerRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+        { "MASNerevarineRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
+        { "ArgonianRace", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
+        { "ArgonianRaceVampire", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
+        { "KhajiitRace", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
+        { "KhajiitRaceVampire", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
+        { "HighElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+        { "HighElfRaceVampire", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+        { "SnowElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+        { "WB_ConjureCraftlord_Race", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
+        { "WoodElfRace", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
+        { "WoodElfRaceVampire", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
+        { "BretonRace", new List<string> { "BretonRace", "BretonRaceVampire" } },
+        { "BretonRaceVampire", new List<string> { "BretonRace", "BretonRaceVampire" } },
+        { "RedguardRace", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
+        { "RedguardRaceVampire", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
+        { "OrcRace", new List<string> { "OrcRace", "OrcRaceVampire" } },
+        { "OrcRaceVampire", new List<string> { "OrcRace", "OrcRaceVampire" } },
+        { "ElderRace", new List<string> { "ElderRace", "ElderRaceVampire" } },
+        { "ElderRaceVampire", new List<string> { "ElderRace", "ElderRaceVampire" } },
+        { "DremoraRace", new List<string> { "DremoraRace" } },
+        { "DA13AfflictedRace", new List<string> { "DA13AfflictedRace" } }
+    };
             }
 
             // Validate race EditorIDs against the load order
@@ -385,14 +400,12 @@ namespace SkyLady.SkyLady
                 var race = entry.Key;
                 var compatibleRaces = entry.Value;
 
-                // Validate the race key
                 if (!validRaceEditorIDs.Contains(race))
                 {
                     Console.WriteLine($"Warning: Race EditorID '{race}' in race compatibility map does not exist in the load order. Skipping this entry.");
                     continue;
                 }
 
-                // Validate each compatible race
                 var validCompatibleRaces = compatibleRaces
                     .Where(compatibleRace =>
                     {
@@ -420,86 +433,181 @@ namespace SkyLady.SkyLady
             raceCompatibilityMap = validatedRaceCompatibilityMap;
             Console.WriteLine($"Race compatibility map validation complete. {raceCompatibilityMap.Count} valid race entries remain.");
 
-            // Voice type mapping
-            var voiceTypeMap = new Dictionary<string, string>
+            // Voice compatibility mapping - Load from SkyLady Voice Compatibility.txt if it exists
+            var voiceTypeMap = new Dictionary<string, List<string>>();
+            var raceVoiceFallbacks = new Dictionary<string, List<string>>();
+            var voiceCompatibilityPath = Path.Combine(modFolderPath, "SkyLady Voice Compatibility.txt");
+            if (File.Exists(voiceCompatibilityPath))
             {
-                { "MaleArgonian", "FemaleArgonian" },
-                { "MaleBandit", "FemaleCommoner" },
-                { "MaleBrute", "FemaleCommander" },
-                { "MaleChild", "FemaleChild" },
-                { "MaleCommander", "FemaleCommander" },
-                { "MaleCommoner", "FemaleCommoner" },
-                { "MaleCommonerAccented", "FemaleCommoner" },
-                { "MaleCondescending", "FemaleCondescending" },
-                { "MaleCoward", "FemaleCoward" },
-                { "MaleDarkElf", "FemaleDarkElf" },
-                { "MaleDrunk", "FemaleSultry" },
-                { "MaleElfHaughty", "FemaleElfHaughty" },
-                { "MaleEvenToned", "FemaleEvenToned" },
-                { "MaleEvenTonedAccented", "FemaleEvenToned" },
-                { "MaleGuard", "FemaleCommander" },
-                { "MaleKhajiit", "FemaleKhajiit" },
-                { "MaleNord", "FemaleNord" },
-                { "MaleNordCommander", "FemaleNord" },
-                { "MaleOldGrumpy", "FemaleOldGrumpy" },
-                { "MaleOldKindly", "FemaleOldKindly" },
-                { "MaleOrc", "FemaleOrc" },
-                { "MaleSlyCynical", "FemaleSultry" },
-                { "MaleSoldier", "FemaleCommander" },
-                { "MaleUniqueGhost", "FemaleUniqueGhost" },
-                { "MaleWarlock", "FemaleCondescending" },
-                { "MaleYoungEager", "FemaleYoungEager" },
-                { "DLC1MaleVampire", "DLC1FemaleVampire" },
-                { "DLC2MaleDarkElfCommoner", "DLC2FemaleDarkElfCommoner" },
-                { "DLC2MaleDarkElfCynical", "FemaleDarkElf" }
-            };
+                try
+                {
+                    var lines = File.ReadAllLines(voiceCompatibilityPath);
+                    bool parsingVoiceMap = false;
+                    bool parsingRaceFallbacks = false;
 
-            // Race to fallback voice list
-            var raceVoiceFallbacks = new Dictionary<string, List<string>>
+                    foreach (var line in lines)
+                    {
+                        var trimmedLine = line.Trim();
+                        if (string.IsNullOrEmpty(trimmedLine) || trimmedLine.StartsWith("#")) continue;
+
+                        if (trimmedLine.Equals("[VoiceMap]", StringComparison.OrdinalIgnoreCase))
+                        {
+                            parsingVoiceMap = true;
+                            parsingRaceFallbacks = false;
+                            continue;
+                        }
+                        else if (trimmedLine.Equals("[RaceVoiceFallbacks]", StringComparison.OrdinalIgnoreCase))
+                        {
+                            parsingVoiceMap = false;
+                            parsingRaceFallbacks = true;
+                            continue;
+                        }
+
+                        if (parsingVoiceMap)
+                        {
+                            var parts = trimmedLine.Split(':');
+                            if (parts.Length != 2)
+                            {
+                                Console.WriteLine($"Invalid voice map entry in SkyLady Voice Compatibility.txt: {trimmedLine}. Expected format: MaleVoice: FemaleVoice1, FemaleVoice2, ...");
+                                continue;
+                            }
+
+                            var maleVoice = parts[0].Trim();
+                            var femaleVoices = parts[1].Split(',')
+                                .Select(v => v.Trim())
+                                .Where(v => !string.IsNullOrEmpty(v))
+                                .ToList();
+
+                            if (femaleVoices.Count == 0)
+                            {
+                                Console.WriteLine($"No female voices defined for {maleVoice} in SkyLady Voice Compatibility.txt. Skipping entry.");
+                                continue;
+                            }
+
+                            voiceTypeMap[maleVoice] = femaleVoices;
+                            Console.WriteLine($"Loaded voice mapping for {maleVoice}: {string.Join(", ", femaleVoices)}");
+                        }
+                        else if (parsingRaceFallbacks)
+                        {
+                            var parts = trimmedLine.Split(':');
+                            if (parts.Length != 2)
+                            {
+                                Console.WriteLine($"Invalid race voice fallback entry in SkyLady Voice Compatibility.txt: {trimmedLine}. Expected format: Race: Voice1, Voice2, ...");
+                                continue;
+                            }
+
+                            var race = parts[0].Trim();
+                            var voices = parts[1].Split(',')
+                                .Select(v => v.Trim())
+                                .Where(v => !string.IsNullOrEmpty(v))
+                                .ToList();
+
+                            if (voices.Count == 0)
+                            {
+                                Console.WriteLine($"No voices defined for race {race} in SkyLady Voice Compatibility.txt. Skipping entry.");
+                                continue;
+                            }
+
+                            raceVoiceFallbacks[race] = voices;
+                            Console.WriteLine($"Loaded race voice fallbacks for {race}: {string.Join(", ", voices)}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error reading SkyLady Voice Compatibility.txt: {ex.Message}. Falling back to default voice mappings.");
+                }
+            }
+
+            // If the file doesn't exist or failed to load, use the default hardcoded mappings
+            if (voiceTypeMap.Count == 0)
             {
-                { "NordRace", new List<string> { "FemaleNord", "FemaleEvenToned", "FemaleCommander" } },
-                { "NordRaceVampire", new List<string> { "FemaleNord", "FemaleEvenToned", "FemaleCommander" } },
-                { "DarkElfRace", new List<string> { "FemaleDarkElf", "DLC2FemaleDarkElfCommoner", "FemaleCondescending" } },
-                { "DarkElfRaceVampire", new List<string> { "FemaleDarkElf", "DLC2FemaleDarkElfCommoner", "FemaleCondescending" } },
-                { "ArgonianRace", new List<string> { "FemaleArgonian", "FemaleSultry" } },
-                { "ArgonianRaceVampire", new List<string> { "FemaleArgonian", "FemaleSultry" } },
-                { "KhajiitRace", new List<string> { "FemaleKhajiit", "FemaleSultry" } },
-                { "KhajiitRaceVampire", new List<string> { "FemaleKhajiit", "FemaleSultry" } },
-                { "HighElfRace", new List<string> { "FemaleElfHaughty", "FemaleEvenToned" } },
-                { "HighElfRaceVampire", new List<string> { "FemaleElfHaughty", "FemaleEvenToned" } },
-                { "WoodElfRace", new List<string> { "FemaleEvenToned", "FemaleYoungEager" } },
-                { "WoodElfRaceVampire", new List<string> { "FemaleEvenToned", "FemaleYoungEager" } },
-                { "BretonRace", new List<string> { "FemaleEvenToned", "FemaleYoungEager" } },
-                { "BretonRaceVampire", new List<string> { "FemaleEvenToned", "FemaleYoungEager" } },
-                { "ImperialRace", new List<string> { "FemaleEvenToned", "FemaleCommander" } },
-                { "ImperialRaceVampire", new List<string> { "FemaleEvenToned", "FemaleCommander" } },
-                { "RedguardRace", new List<string> { "FemaleEvenToned", "FemaleSultry" } },
-                { "RedguardRaceVampire", new List<string> { "FemaleEvenToned", "FemaleSultry" } },
-                { "OrcRace", new List<string> { "FemaleOrc", "FemaleCommander" } },
-                { "OrcRaceVampire", new List<string> { "FemaleOrc", "FemaleCommander" } }
-            };
+                Console.WriteLine("Using default voice type map.");
+                voiceTypeMap = new Dictionary<string, List<string>>
+    {
+        { "MaleArgonian", new List<string> { "FemaleArgonian" } },
+        { "MaleBandit", new List<string> { "FemaleCommoner" } },
+        { "MaleBrute", new List<string> { "FemaleCommander" } },
+        { "MaleChild", new List<string> { "FemaleChild" } },
+        { "MaleCommander", new List<string> { "FemaleCommander" } },
+        { "MaleCommoner", new List<string> { "FemaleCommoner" } },
+        { "MaleCommonerAccented", new List<string> { "FemaleCommoner" } },
+        { "MaleCondescending", new List<string> { "FemaleCondescending" } },
+        { "MaleCoward", new List<string> { "FemaleCoward" } },
+        { "MaleDarkElf", new List<string> { "FemaleDarkElf" } },
+        { "MaleDrunk", new List<string> { "FemaleSultry" } },
+        { "MaleElfHaughty", new List<string> { "FemaleElfHaughty" } },
+        { "MaleEvenToned", new List<string> { "FemaleEvenToned" } },
+        { "MaleEvenTonedAccented", new List<string> { "FemaleEvenToned" } },
+        { "MaleGuard", new List<string> { "FemaleCommander" } },
+        { "MaleKhajiit", new List<string> { "FemaleKhajiit" } },
+        { "MaleNord", new List<string> { "FemaleNord" } },
+        { "MaleNordCommander", new List<string> { "FemaleNord" } },
+        { "MaleOldGrumpy", new List<string> { "FemaleOldGrumpy" } },
+        { "MaleOldKindly", new List<string> { "FemaleOldKindly" } },
+        { "MaleOrc", new List<string> { "FemaleOrc" } },
+        { "MaleSlyCynical", new List<string> { "FemaleSultry" } },
+        { "MaleSoldier", new List<string> { "FemaleCommander" } },
+        { "MaleUniqueGhost", new List<string> { "FemaleUniqueGhost" } },
+        { "MaleWarlock", new List<string> { "FemaleCondescending" } },
+        { "MaleYoungEager", new List<string> { "FemaleYoungEager" } },
+        { "DLC1MaleVampire", new List<string> { "DLC1FemaleVampire" } },
+        { "DLC2MaleDarkElfCommoner", new List<string> { "DLC2FemaleDarkElfCommoner" } },
+        { "DLC2MaleDarkElfCynical", new List<string> { "FemaleDarkElf" } }
+    };
+            }
+
+            if (raceVoiceFallbacks.Count == 0)
+            {
+                Console.WriteLine("Using default race voice fallbacks.");
+                raceVoiceFallbacks = new Dictionary<string, List<string>>
+    {
+        { "NordRace", new List<string> { "FemaleNord", "FemaleEvenToned", "FemaleCommander" } },
+        { "NordRaceVampire", new List<string> { "FemaleNord", "FemaleEvenToned", "FemaleCommander" } },
+        { "DarkElfRace", new List<string> { "FemaleDarkElf", "DLC2FemaleDarkElfCommoner", "FemaleCondescending" } },
+        { "DarkElfRaceVampire", new List<string> { "FemaleDarkElf", "DLC2FemaleDarkElfCommoner", "FemaleCondescending" } },
+        { "ArgonianRace", new List<string> { "FemaleArgonian", "FemaleSultry" } },
+        { "ArgonianRaceVampire", new List<string> { "FemaleArgonian", "FemaleSultry" } },
+        { "KhajiitRace", new List<string> { "FemaleKhajiit", "FemaleSultry" } },
+        { "KhajiitRaceVampire", new List<string> { "FemaleKhajiit", "FemaleSultry" } },
+        { "HighElfRace", new List<string> { "FemaleElfHaughty", "FemaleEvenToned" } },
+        { "HighElfRaceVampire", new List<string> { "FemaleElfHaughty", "FemaleEvenToned" } },
+        { "WoodElfRace", new List<string> { "FemaleEvenToned", "FemaleYoungEager" } },
+        { "WoodElfRaceVampire", new List<string> { "FemaleEvenToned", "FemaleYoungEager" } },
+        { "BretonRace", new List<string> { "FemaleEvenToned", "FemaleYoungEager" } },
+        { "BretonRaceVampire", new List<string> { "FemaleEvenToned", "FemaleYoungEager" } },
+        { "ImperialRace", new List<string> { "FemaleEvenToned", "FemaleCommander" } },
+        { "ImperialRaceVampire", new List<string> { "FemaleEvenToned", "FemaleCommander" } },
+        { "RedguardRace", new List<string> { "FemaleEvenToned", "FemaleSultry" } },
+        { "RedguardRaceVampire", new List<string> { "FemaleEvenToned", "FemaleSultry" } },
+        { "OrcRace", new List<string> { "FemaleOrc", "FemaleCommander" } },
+        { "OrcRaceVampire", new List<string> { "FemaleOrc", "FemaleCommander" } }
+    };
+            }
 
             // Collect female templates and count male NPCs (excluding Player and presets)
             int maleNpcCount = 0;
-            int eligibleMaleNpcCount = 0; // Count of male NPCs eligible for patching (excludes blacklisted NPCs)
+            int eligibleMaleNpcCount = 0;
             int successfulPatches = 0;
-            int skippedDueToPatch = 0; // Add counter for debugging
-            int skippedDueToFilter = 0; // Add counter for debugging
-            var blacklistedMaleNpcsByMod = new Dictionary<ModKey, int>(); // Track blacklisted male NPCs by mod
-            foreach (var npc in state.LoadOrder.PriorityOrder.Npc().WinningOverrides())
+            int skippedDueToPatch = 0;
+            int skippedDueToFilter = 0;
+            var blacklistedMaleNpcsByMod = new Dictionary<ModKey, int>();
+            foreach (var npc in state.LoadOrder.PriorityOrder.WinningOverrides<INpcGetter>())
             {
                 var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
                 if (race != null && humanoidRaces.Contains(race))
                 {
                     if (npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female))
                     {
-                        // Pre-filter templates when building femaleTemplatesByRace
-                        bool isSkyrimEsm = npc.FormKey.ModKey.FileName.Equals("Skyrim.esm");
+                        bool isVanillaPlugin = npc.FormKey.ModKey.FileName.Equals("Skyrim.esm") ||
+                                              npc.FormKey.ModKey.FileName.Equals("Dawnguard.esm") ||
+                                              npc.FormKey.ModKey.FileName.Equals("Dragonborn.esm") ||
+                                              npc.FormKey.ModKey.FileName.Equals("Update.esm") ||
+                                              npc.FormKey.ModKey.FileName.Equals("HearthFires.esm");
                         bool isAfflicted = race == "DA13AfflictedRace";
                         bool notBlacklisted = !blacklistedMods.Contains(npc.FormKey.ModKey.FileName);
                         var (nifExists, ddsExists) = facegenCache[(npc.FormKey.ModKey.FileName.ToString(), npc.FormKey.IDString())];
-                        bool hasBeenPatched = npc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false;
-                        bool condition = !hasBeenPatched && ((isAfflicted && isSkyrimEsm) || (notBlacklisted && (nifExists && ddsExists)));
+                        bool condition = isVanillaPlugin || (notBlacklisted && nifExists && ddsExists);
                         if (condition)
                         {
                             femaleTemplatesByRace[race] = femaleTemplatesByRace.GetValueOrDefault(race, []);
@@ -512,18 +620,15 @@ namespace SkyLady.SkyLady
                                                      npc.EditorID.Contains("preset", StringComparison.OrdinalIgnoreCase)))
                         {
                             filteredNpcs[npc.EditorID + " (" + npc.FormKey.IDString() + ")"] = "Filtered (Player/Preset)";
-                            skippedDueToFilter++; // Increment counter
+                            skippedDueToFilter++;
                             continue;
                         }
-                        // Check if NPC has already been patched
-                        bool hasBeenPatched = npc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false;
-                        if (hasBeenPatched)
+                        if (skyLadyPatched != null && npc.Keywords?.Any(k => k.FormKey == skyLadyPatched) == true)
                         {
-                            skippedDueToPatch++; // Increment counter
+                            skippedDueToPatch++;
                             continue;
                         }
                         maleNpcCount++;
-                        // Check if NPC is blacklisted
                         if (settings.ModsToExcludeFromPatching.Contains(npc.FormKey.ModKey))
                         {
                             blacklistedMaleNpcsByMod[npc.FormKey.ModKey] = blacklistedMaleNpcsByMod.GetValueOrDefault(npc.FormKey.ModKey, 0) + 1;
@@ -553,12 +658,12 @@ namespace SkyLady.SkyLady
             int totalSingleNpcs = settings.NpcsToPatch.Count;
             var patchedNpcs = new HashSet<FormKey>();
 
-            foreach (var npc in state.LoadOrder.PriorityOrder.Npc().WinningOverrides())
+            foreach (var npc in state.LoadOrder.PriorityOrder.WinningOverrides<INpcGetter>())
             {
                 if (patchedNpcs.Contains(npc.FormKey))
                     continue;
 
-                if (npc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false)
+                if (skyLadyPatched != null && npc.Keywords?.Any(k => k.FormKey == skyLadyPatched) == true)
                 {
                     skippedDueToPatch++;
                     continue;
@@ -575,23 +680,22 @@ namespace SkyLady.SkyLady
                     continue;
                 }
 
-                // Apply filtering based on settings
                 bool shouldPatchNew = true;
                 if (!patchEntireLoadOrder && !requiemKeys.Contains(npc.FormKey.ModKey))
-                    continue; // Skip NPCs from non-targeted mods in both modes
+                    continue;
 
                 if (settings.PatchSingleNpcOnly)
                 {
                     if (!settings.NpcsToPatch.Any(n => n.Npc.FormKey == npc.FormKey))
                     {
-                        shouldPatchNew = false; // Preserve non-selected NPCs in single NPC mode
+                        shouldPatchNew = false;
                     }
                 }
                 else
                 {
                     if (settings.PreserveLastRunAppearances)
                     {
-                        shouldPatchNew = false; // Preserve in bulk mode if enabled
+                        shouldPatchNew = false;
                     }
                 }
 
@@ -624,7 +728,6 @@ namespace SkyLady.SkyLady
                     bool facegenCopied = false;
                     Npc? patchedNpc = null;
 
-                    // Check for locked NPCs or preserved appearances
                     if (lockedNpcs.TryGetValue(npc.FormKey, out var lockedEntry) || !shouldPatchNew)
                     {
                         if (tempTemplates.TryGetValue(npc.FormKey.ToString(), out var tempTemplateKey)
@@ -649,10 +752,8 @@ namespace SkyLady.SkyLady
                         }
                     }
 
-                    // Delete old facegen
                     DeleteExistingFacegenFiles(modFolderPath, npc.FormKey);
 
-                    // Patch NPC
                     patchedNpc = state.PatchMod.Npcs.GetOrAddAsOverride(npc);
                     if (patchedNpc == null)
                     {
@@ -681,7 +782,6 @@ namespace SkyLady.SkyLady
                             patchedNpc.Factions.AddRange(cachedOverride.Factions.Select(f => f.DeepCopy()));
                     }
 
-                    // Template selection
                     if (!useLockedTemplate)
                     {
                         var validTemplates = templates.ToList();
@@ -702,14 +802,19 @@ namespace SkyLady.SkyLady
                             var templateRace = template.Race.TryResolve(state.LinkCache)?.EditorID;
                             var bsaPath = Path.Combine(state.DataFolderPath, templateFileName.Replace(".esm", ".bsa").Replace(".esp", ".bsa"));
 
-                            if (File.Exists(bsaPath) || (blacklistedMods.Contains(templateFileName) &&
-                                !(templateFileName.Equals("Skyrim.esm") && templateRace == "DA13AfflictedRace")))
+                            // Allow vanilla plugins to bypass facegen/BSA check
+                            bool isVanillaPlugin = templateFileName.Equals("Skyrim.esm") ||
+                                                  templateFileName.Equals("Dawnguard.esm") ||
+                                                  templateFileName.Equals("Dragonborn.esm") ||
+                                                  templateFileName.Equals("Update.esm") ||
+                                                  templateFileName.Equals("HearthFires.esm");
+
+                            if (!isVanillaPlugin && (File.Exists(bsaPath) || blacklistedMods.Contains(templateFileName)))
                             {
                                 Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({template.FormKey}) from {templateFileName} (BSA or blacklisted)");
                                 continue;
                             }
 
-                            // Apply template properties
                             if (partsToCopy.Contains("PNAM") && template.HeadParts != null) patchedNpc.HeadParts.SetTo(template.HeadParts);
                             if (partsToCopy.Contains("WNAM") && template.WornArmor != null) patchedNpc.WornArmor.SetTo(template.WornArmor);
                             if (partsToCopy.Contains("QNAM")) patchedNpc.TextureLighting = template.TextureLighting;
@@ -721,22 +826,22 @@ namespace SkyLady.SkyLady
 
                             patchedNpc.Configuration.Flags |= NpcConfiguration.Flag.Female;
 
-                            // Set voice
                             if (npc.Voice != null)
                             {
                                 var voiceType = npc.Voice.TryResolve(state.LinkCache)?.EditorID;
                                 if (!string.IsNullOrEmpty(voiceType))
                                 {
                                     bool isFemaleVoice = voiceType.Contains("Female", StringComparison.OrdinalIgnoreCase) ||
-                                                         voiceTypeMap.Values.Any(v => v.Equals(voiceType)) ||
-                                                         raceVoiceFallbacks.Values.Any(list => list.Contains(voiceType));
+                                                         voiceTypeMap.Any(kvp => kvp.Value.Contains(voiceType)) ||
+                                                         raceVoiceFallbacks.Any(kvp => kvp.Value.Contains(voiceType));
 
                                     if (!isFemaleVoice)
                                     {
-                                        if (voiceTypeMap.TryGetValue(voiceType, out var femaleVoiceID))
+                                        if (voiceTypeMap.TryGetValue(voiceType, out var femaleVoiceIDs) && femaleVoiceIDs.Count > 0)
                                         {
+                                            var selectedFemaleVoiceID = femaleVoiceIDs[random.Next(femaleVoiceIDs.Count)];
                                             var femaleVoice = state.LoadOrder.PriorityOrder.VoiceType().WinningOverrides()
-                                                .FirstOrDefault(vt => vt.EditorID == femaleVoiceID);
+                                                .FirstOrDefault(vt => vt.EditorID == selectedFemaleVoiceID);
                                             if (femaleVoice != null)
                                                 patchedNpc.Voice.SetTo(femaleVoice);
                                         }
@@ -760,7 +865,6 @@ namespace SkyLady.SkyLady
                     }
                     else
                     {
-                        // Apply locked or preserved template properties
                         if (template != null)
                         {
                             if (partsToCopy.Contains("PNAM") && template.HeadParts != null) patchedNpc.HeadParts.SetTo(template.HeadParts);
@@ -780,15 +884,16 @@ namespace SkyLady.SkyLady
                                 if (!string.IsNullOrEmpty(voiceType))
                                 {
                                     bool isFemaleVoice = voiceType.Contains("Female", StringComparison.OrdinalIgnoreCase) ||
-                                                         voiceTypeMap.Values.Any(v => v.Equals(voiceType)) ||
-                                                         raceVoiceFallbacks.Values.Any(list => list.Contains(voiceType));
+                                                         voiceTypeMap.Any(kvp => kvp.Value.Contains(voiceType)) ||
+                                                         raceVoiceFallbacks.Any(kvp => kvp.Value.Contains(voiceType));
 
                                     if (!isFemaleVoice)
                                     {
-                                        if (voiceTypeMap.TryGetValue(voiceType, out var femaleVoiceID))
+                                        if (voiceTypeMap.TryGetValue(voiceType, out var femaleVoiceIDs) && femaleVoiceIDs.Count > 0)
                                         {
+                                            var selectedFemaleVoiceID = femaleVoiceIDs[random.Next(femaleVoiceIDs.Count)];
                                             var femaleVoice = state.LoadOrder.PriorityOrder.VoiceType().WinningOverrides()
-                                                .FirstOrDefault(vt => vt.EditorID == femaleVoiceID);
+                                                .FirstOrDefault(vt => vt.EditorID == selectedFemaleVoiceID);
                                             if (femaleVoice != null)
                                                 patchedNpc.Voice.SetTo(femaleVoice);
                                         }
@@ -809,7 +914,6 @@ namespace SkyLady.SkyLady
                         }
                     }
 
-                    // Copy facegen for both locked and new templates
                     if (template != null)
                     {
                         var templateFid = template.FormKey.IDString();
@@ -824,14 +928,21 @@ namespace SkyLady.SkyLady
                         bool nifExists = facegenCache[(templateFileName, templateFid)].NifExists;
                         bool ddsExists = facegenCache[(templateFileName, templateFid)].DdsExists;
 
-                        if (templateFileName.Equals("Skyrim.esm") && templateRace == "DA13AfflictedRace")
+                        // Allow vanilla plugins to bypass facegen copying
+                        bool isVanillaPlugin = templateFileName.Equals("Skyrim.esm") ||
+                                              templateFileName.Equals("Dawnguard.esm") ||
+                                              templateFileName.Equals("Dragonborn.esm") ||
+                                              templateFileName.Equals("Update.esm") ||
+                                              templateFileName.Equals("HearthFires.esm");
+
+                        if (isVanillaPlugin)
                         {
                             var nifDir = Path.GetDirectoryName(patchedNif) ?? throw new InvalidOperationException("NIF path directory is null");
                             var ddsDir = Path.GetDirectoryName(patchedDds) ?? throw new InvalidOperationException("DDS path directory is null");
                             Directory.CreateDirectory(nifDir);
                             Directory.CreateDirectory(ddsDir);
                             facegenCopied = true;
-                            Console.WriteLine($"Assumed vanilla facegen for Afflicted template {template.EditorID ?? "Unnamed"} ({templateFid}) from {templateFileName}");
+                            Console.WriteLine($"Assumed vanilla facegen for template {template.EditorID ?? "Unnamed"} ({templateFid}) from {templateFileName}");
                         }
                         else if (nifExists && ddsExists)
                         {
@@ -851,10 +962,10 @@ namespace SkyLady.SkyLady
                         successfulPatches++;
                         patchedNpcs.Add(npc.FormKey);
 
-                        if (!(patchedNpc.Keywords?.Any(k => k.FormKey == SkyLadyPatched) ?? false))
+                        if (useKeywords && skyLadyPatched != null)
                         {
                             patchedNpc.Keywords ??= [];
-                            patchedNpc.Keywords.Add(SkyLadyPatched);
+                            patchedNpc.Keywords.Add(skyLadyPatched.Value);
                         }
 
                         currentRunTemplates[npc.FormKey.ToString()] = template?.FormKey.ToString() ?? "";
