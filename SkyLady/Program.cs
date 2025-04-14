@@ -1,4 +1,3 @@
-// START OF SECTION 1
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Synthesis;
 using Mutagen.Bethesda.Skyrim;
@@ -168,7 +167,7 @@ namespace SkyLady.SkyLady
             var settings = Settings.Value;
             Console.WriteLine("SkyLady (Side) running on .NET 8.0...");
 
-            // Dynamically locate the SkyLady mod folder by searching for SkyLady races.txt
+            // Dynamically locate the SkyLady mod folder by searching for SkyLadyMarker.txt
             var modsBasePath = Path.Combine(state.DataFolderPath, "..", "..", "mods");
             if (!Directory.Exists(modsBasePath))
             {
@@ -178,8 +177,8 @@ namespace SkyLady.SkyLady
             string? modFolderPath = null;
             foreach (var dir in Directory.GetDirectories(modsBasePath))
             {
-                var txtPath = Path.Combine(dir, "SkyLady races.txt");
-                if (File.Exists(txtPath))
+                var markerPath = Path.Combine(dir, "SkyLadyMarker.txt");
+                if (File.Exists(markerPath))
                 {
                     modFolderPath = dir;
                     break;
@@ -188,7 +187,225 @@ namespace SkyLady.SkyLady
 
             if (modFolderPath == null)
             {
-                throw new Exception("Cannot find SkyLady mod folder containing SkyLady races.txt. Ensure the mod is installed correctly.");
+                modFolderPath = Path.Combine(state.DataFolderPath, "SkyLady");
+                Directory.CreateDirectory(modFolderPath);
+                Console.WriteLine($"Created default SkyLady mod folder at {modFolderPath}.");
+            }
+
+            // Define paths using the mod folder
+            var racesPath = Path.Combine(modFolderPath, "SkyLady races.txt");
+            var raceCompatibilityPath = Path.Combine(modFolderPath, "SkyLady Race Compatibility.txt");
+            var partsToCopyPath = Path.Combine(modFolderPath, "SkyLady partsToCopy.txt");
+            var voiceCompatibilityPath = Path.Combine(modFolderPath, "SkyLady Voice Compatibility.txt");
+            var tempTemplatesPath = Path.Combine(modFolderPath, "SkyLadyTempTemplates.json");
+
+            // Create .txt files with defaults if they don't exist
+            if (!File.Exists(racesPath))
+            {
+                try
+                {
+                    File.WriteAllLines(racesPath,
+                    [
+                        "# SkyLady Races Configuration",
+                        "# Lists the races eligible for patching by SkyLady (e.g., NordRace, ArgonianRace).",
+                        "# Format: One race EditorID per line.",
+                        "# These races determine which NPCs can be transformed with female templates.",
+                        "# Add custom races from mods to include them, or remove races to exclude.",
+                        "# Back up this file before editing.",
+                        "# Lines starting with # or empty lines are ignored.",
+                        "",
+                        "ArgonianRace",
+                        "BretonRace",
+                        "DarkElfRace",
+                        "DremoraRace",
+                        "ElderRace",
+                        "HighElfRace",
+                        "ImperialRace",
+                        "KhajiitRace",
+                        "NordRace",
+                        "OrcRace",
+                        "RedguardRace",
+                        "WoodElfRace",
+                        "ArgonianRaceVampire",
+                        "BretonRaceVampire",
+                        "DarkElfRaceVampire",
+                        "ElderRaceVampire",
+                        "HighElfRaceVampire",
+                        "ImperialRaceVampire",
+                        "NordRaceVampire",
+                        "KhajiitRaceVampire",
+                        "OrcRaceVampire",
+                        "RedguardRaceVampire",
+                        "WoodElfRaceVampire",
+                        "DA13AfflictedRace",
+                        "COTRRace",
+                        "ArgonianRaceKZ",
+                        "KhajiitRaceKZ"
+                    ]);
+                    Console.WriteLine($"Created default SkyLady races.txt at {racesPath}.");
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"Failed to create SkyLady races.txt at {racesPath}. Check write permissions: {ex.Message}");
+                }
+            }
+
+            if (!File.Exists(partsToCopyPath))
+            {
+                try
+                {
+                    File.WriteAllLines(partsToCopyPath,
+                    [
+                        "# SkyLady Parts to Copy Configuration",
+                        "# Lists NPC appearance components to copy from female templates (e.g., PNAM, Tint Layers).",
+                        "# Format: One component identifier per line.",
+                        "# These settings control which visual aspects are applied to patched NPCs.",
+                        "# Adjusting these is not recommended, as it may cause unintended behavior.",
+                        "# Back up this file before editing.",
+                        "# Lines starting with # or empty lines are ignored.",
+                        "",
+                        "PNAM",
+                        "HEDP",
+                        "WNAM",
+                        "QNAM",
+                        "NAM9",
+                        "NAMA",
+                        "Tint Layers",
+                        "FTST",
+                        "HCLF",
+                        "NAM7",
+                        "NAM6"
+                    ]);
+                    Console.WriteLine($"Created default SkyLady partsToCopy.txt at {partsToCopyPath}.");
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"Failed to create SkyLady partsToCopy.txt at {partsToCopyPath}. Check write permissions: {ex.Message}");
+                }
+            }
+
+            if (!File.Exists(raceCompatibilityPath))
+            {
+                try
+                {
+                    File.WriteAllLines(raceCompatibilityPath,
+                    [
+                        "# SkyLady Race Compatibility Configuration",
+                        "# Defines which races can share female templates (e.g., NordRace: NordRace, ImperialRace).",
+                        "# Format: Race: CompatibleRace1, CompatibleRace2, ...",
+                        "# Controls template matching for patched NPCs; broader mappings increase variety.",
+                        "# Add mod races or adjust mappings to suit your load order.",
+                        "# Back up this file before editing.",
+                        "# Lines starting with # or empty lines are ignored.",
+                        "",
+                        "NordRace: NordRace",
+                        "NordRaceVampire: NordRace, NordRaceVampire",
+                        "ImperialRace: ImperialRace",
+                        "ImperialRaceVampire: ImperialRace, ImperialRaceVampire",
+                        "DarkElfRace: DarkElfRace, _00DwemerRace, MASNerevarineRace",
+                        "DarkElfRaceVampire: DarkElfRace, DarkElfRaceVampire, _00DwemerRace, MASNerevarineRace",
+                        "ArgonianRace: ArgonianRace",
+                        "ArgonianRaceVampire: ArgonianRace, ArgonianRaceVampire",
+                        "KhajiitRace: KhajiitRace",
+                        "KhajiitRaceVampire: KhajiitRace, KhajiitRaceVampire",
+                        "HighElfRace: HighElfRace",
+                        "HighElfRaceVampire: HighElfRace, HighElfRaceVampire",
+                        "WoodElfRace: WoodElfRace",
+                        "WoodElfRaceVampire: WoodElfRace, WoodElfRaceVampire",
+                        "BretonRace: BretonRace",
+                        "BretonRaceVampire: BretonRace, BretonRaceVampire",
+                        "RedguardRace: RedguardRace",
+                        "RedguardRaceVampire: RedguardRace, RedguardRaceVampire",
+                        "OrcRace: OrcRace",
+                        "OrcRaceVampire: OrcRace, OrcRaceVampire",
+                        "ElderRace: ElderRace",
+                        "ElderRaceVampire: ElderRace, ElderRaceVampire",
+                        "DremoraRace: DremoraRace",
+                        "DA13AfflictedRace: DA13AfflictedRace",
+                        "COTRRace: COTRRace, NordRace, ImperialRace",
+                        "ArgonianRaceKZ: ArgonianRaceKZ",
+                        "KhajiitRaceKZ: KhajittRaceKZ"
+                    ]);
+                    Console.WriteLine($"Created default SkyLady Race Compatibility.txt at {raceCompatibilityPath}.");
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"Failed to create SkyLady Race Compatibility.txt at {raceCompatibilityPath}. Check write permissions: {ex.Message}");
+                }
+            }
+
+            if (!File.Exists(voiceCompatibilityPath))
+            {
+                try
+                {
+                    File.WriteAllLines(voiceCompatibilityPath,
+                    [
+                        "# SkyLady Voice Compatibility Configuration",
+                        "# Format:",
+                        "# [VoiceMap] for male-to-female voice mappings. If an NPC used a male voice on the left side before using SkyLady, it will end up with the female voice on the right side.",
+                        "# [RaceVoiceFallbacks] for race-specific fallback voices. If an NPC of the race on the left side contains a voice not mapped in [VoiceMap] section, it will randomly choose one of the race's voices on the right side.",
+                        "# Back up this file before editing.",
+                        "# Lines starting with # or empty lines are ignored.",
+                        "",
+                        "[VoiceMap]",
+                        "MaleArgonian: FemaleArgonian",
+                        "MaleBandit: FemaleCommoner",
+                        "MaleBrute: FemaleCommander",
+                        "MaleChild: FemaleChild",
+                        "MaleCommander: FemaleCommander",
+                        "MaleCommoner: FemaleCommoner",
+                        "MaleCommonerAccented: FemaleCommoner",
+                        "MaleCondescending: FemaleCondescending",
+                        "MaleCoward: FemaleCoward",
+                        "MaleDarkElf: FemaleDarkElf",
+                        "MaleDrunk: FemaleSultry",
+                        "MaleElfHaughty: FemaleElfHaughty",
+                        "MaleEvenToned: FemaleEvenToned",
+                        "MaleEvenTonedAccented: FemaleEvenToned",
+                        "MaleGuard: FemaleCommander",
+                        "MaleKhajiit: FemaleKhajiit",
+                        "MaleNord: FemaleNord",
+                        "MaleNordCommander: FemaleNord",
+                        "MaleOldGrumpy: FemaleOldGrumpy",
+                        "MaleOldKindly: FemaleOldKindly",
+                        "MaleOrc: FemaleOrc",
+                        "MaleSlyCynical: FemaleSultry",
+                        "MaleSoldier: FemaleCommander",
+                        "MaleUniqueGhost: FemaleUniqueGhost",
+                        "MaleWarlock: FemaleCondescending",
+                        "MaleYoungEager: FemaleYoungEager",
+                        "DLC1MaleVampire: DLC1FemaleVampire",
+                        "DLC2MaleDarkElfCommoner: DLC2FemaleDarkElfCommoner",
+                        "DLC2MaleDarkElfCynical: FemaleDarkElf",
+                        "",
+                        "[RaceVoiceFallbacks]",
+                        "NordRace: FemaleNord, FemaleEvenToned, FemaleCommander",
+                        "NordRaceVampire: FemaleNord, FemaleEvenToned, FemaleCommander",
+                        "DarkElfRace: FemaleDarkElf, DLC2FemaleDarkElfCommoner, FemaleCondescending",
+                        "DarkElfRaceVampire: FemaleDarkElf, DLC2FemaleDarkElfCommoner, FemaleCondescending",
+                        "ArgonianRace: FemaleArgonian, FemaleSultry",
+                        "ArgonianRaceVampire: FemaleArgonian, FemaleSultry",
+                        "KhajiitRace: FemaleKhajiit, FemaleSultry",
+                        "KhajiitRaceVampire: FemaleKhajiit, FemaleSultry",
+                        "HighElfRace: FemaleElfHaughty, FemaleEvenToned",
+                        "HighElfRaceVampire: FemaleElfHaughty, FemaleEvenToned",
+                        "WoodElfRace: FemaleEvenToned, FemaleYoungEager",
+                        "WoodElfRaceVampire: FemaleEvenToned, FemaleYoungEager",
+                        "BretonRace: FemaleEvenToned, FemaleYoungEager",
+                        "BretonRaceVampire: FemaleEvenToned, FemaleYoungEager",
+                        "ImperialRace: FemaleEvenToned, FemaleCommander",
+                        "ImperialRaceVampire: FemaleEvenToned, FemaleCommander",
+                        "RedguardRace: FemaleEvenToned, FemaleSultry",
+                        "RedguardRaceVampire: FemaleEvenToned, FemaleSultry",
+                        "OrcRace: FemaleOrc, FemaleCommander",
+                        "OrcRaceVampire: FemaleOrc, FemaleCommander"
+                    ]);
+                    Console.WriteLine($"Created default SkyLady Voice Compatibility.txt at {voiceCompatibilityPath}.");
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"Failed to create SkyLady Voice Compatibility.txt at {voiceCompatibilityPath}. Check write permissions: {ex.Message}");
+                }
             }
 
             // Check for SkyLadyKeywords.esp if AppendSuffixToOutput is enabled
@@ -212,13 +429,9 @@ namespace SkyLady.SkyLady
                 }
             }
 
-            // Define paths using the dynamically located mod folder
-            var racesPath = Path.Combine(modFolderPath, "SkyLady races.txt");
-            var raceCompatibilityPath = Path.Combine(modFolderPath, "SkyLady Race Compatibility.txt");
-            var partsToCopyPath = Path.Combine(modFolderPath, "SkyLady partsToCopy.txt");
-            var tempTemplatesPath = Path.Combine(modFolderPath, "SkyLadyTempTemplates.json");
-            var humanoidRaces = new HashSet<string>(File.ReadAllLines(racesPath).Select(line => line.Trim()));
-            var partsToCopy = File.ReadAllLines(partsToCopyPath).ToHashSet();
+            // Load configuration files
+            var humanoidRaces = new HashSet<string>(File.ReadAllLines(racesPath).Select(line => line.Trim()).Where(line => !string.IsNullOrEmpty(line) && !line.StartsWith("#")));
+            var partsToCopy = File.ReadAllLines(partsToCopyPath).ToHashSet().Where(line => !string.IsNullOrEmpty(line) && !line.StartsWith("#")).ToHashSet();
             HashSet<string> blacklistedMods = [.. settings.TemplateModBlacklist.Select(modKey => modKey.FileName.String)];
             var femaleTemplatesByRace = new Dictionary<string, List<INpcGetter>>();
             var successfulTemplatesByRace = new Dictionary<string, List<INpcGetter>>();
@@ -308,83 +521,47 @@ namespace SkyLady.SkyLady
                 .ToDictionary(n => n.FormKey, n => n);
 
             // START OF SECTION 2
-            // Race compatibility mapping - Load from SkyLady Race Compatibility.txt if it exists
+            // Race compatibility mapping - Load from SkyLady Race Compatibility.txt
             var raceCompatibilityMap = new Dictionary<string, List<string>>();
-            if (File.Exists(raceCompatibilityPath))
+            try
             {
-                try
+                var lines = File.ReadAllLines(raceCompatibilityPath);
+                foreach (var line in lines)
                 {
-                    var lines = File.ReadAllLines(raceCompatibilityPath);
-                    foreach (var line in lines)
+                    var trimmedLine = line.Trim();
+                    if (string.IsNullOrEmpty(trimmedLine) || trimmedLine.StartsWith("#")) continue;
+
+                    var parts = trimmedLine.Split(':');
+                    if (parts.Length != 2)
                     {
-                        var trimmedLine = line.Trim();
-                        if (string.IsNullOrEmpty(trimmedLine) || trimmedLine.StartsWith("#")) continue;
-
-                        var parts = trimmedLine.Split(':');
-                        if (parts.Length != 2)
-                        {
-                            Console.WriteLine($"Invalid race compatibility entry in SkyLady Race Compatibility.txt: {trimmedLine}. Expected format: Race: CompatibleRace1, CompatibleRace2, ...");
-                            continue;
-                        }
-
-                        var race = parts[0].Trim();
-                        var compatibleRaces = parts[1].Split(',')
-                            .Select(r => r.Trim())
-                            .Where(r => !string.IsNullOrEmpty(r))
-                            .ToList();
-
-                        if (compatibleRaces.Count == 0)
-                        {
-                            Console.WriteLine($"No compatible races defined for {race} in SkyLady Race Compatibility.txt. Skipping entry.");
-                            continue;
-                        }
-
-                        raceCompatibilityMap[race] = compatibleRaces;
-                        Console.WriteLine($"Loaded race compatibility for {race}: {string.Join(", ", compatibleRaces)}");
+                        Console.WriteLine($"Invalid race compatibility entry in SkyLady Race Compatibility.txt: {trimmedLine}. Expected format: Race: CompatibleRace1, CompatibleRace2, ...");
+                        continue;
                     }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error reading SkyLady Race Compatibility.txt: {ex.Message}. Falling back to default race compatibility map.");
+
+                    var race = parts[0].Trim();
+                    var compatibleRaces = parts[1].Split(',')
+                        .Select(r => r.Trim())
+                        .Where(r => !string.IsNullOrEmpty(r))
+                        .ToList();
+
+                    if (compatibleRaces.Count == 0)
+                    {
+                        Console.WriteLine($"No compatible races defined for {race} in SkyLady Race Compatibility.txt. Skipping entry.");
+                        continue;
+                    }
+
+                    raceCompatibilityMap[race] = compatibleRaces;
+                    Console.WriteLine($"Loaded race compatibility for {race}: {string.Join(", ", compatibleRaces)}");
                 }
             }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error reading SkyLady Race Compatibility.txt at {raceCompatibilityPath}. Ensure the file is accessible: {ex.Message}");
+            }
 
-            // If the file doesn't exist or failed to load, use the default hardcoded map
             if (raceCompatibilityMap.Count == 0)
             {
-                Console.WriteLine("Using default race compatibility map.");
-                raceCompatibilityMap = new Dictionary<string, List<string>>
-    {
-        { "NordRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
-        { "NordRaceVampire", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
-        { "HothRace", new List<string> { "NordRace", "NordRaceVampire", "HothRace", "ImperialRace", "ImperialRaceVampire" } },
-        { "ImperialRace", new List<string> { "ImperialRace", "ImperialRaceVampire", "NordRace", "NordRaceVampire", "HothRace" } },
-        { "ImperialRaceVampire", new List<string> { "ImperialRace", "ImperialRaceVampire", "NordRace", "NordRaceVampire", "HothRace" } },
-        { "DarkElfRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-        { "DarkElfRaceVampire", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-        { "_00DwemerRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-        { "MASNerevarineRace", new List<string> { "DarkElfRace", "DarkElfRaceVampire", "_00DwemerRace", "MASNerevarineRace" } },
-        { "ArgonianRace", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
-        { "ArgonianRaceVampire", new List<string> { "ArgonianRace", "ArgonianRaceVampire" } },
-        { "KhajiitRace", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
-        { "KhajiitRaceVampire", new List<string> { "KhajiitRace", "KhajiitRaceVampire" } },
-        { "HighElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-        { "HighElfRaceVampire", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-        { "SnowElfRace", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-        { "WB_ConjureCraftlord_Race", new List<string> { "HighElfRace", "HighElfRaceVampire", "SnowElfRace", "WB_ConjureCraftlord_Race" } },
-        { "WoodElfRace", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
-        { "WoodElfRaceVampire", new List<string> { "WoodElfRace", "WoodElfRaceVampire" } },
-        { "BretonRace", new List<string> { "BretonRace", "BretonRaceVampire" } },
-        { "BretonRaceVampire", new List<string> { "BretonRace", "BretonRaceVampire" } },
-        { "RedguardRace", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
-        { "RedguardRaceVampire", new List<string> { "RedguardRace", "RedguardRaceVampire" } },
-        { "OrcRace", new List<string> { "OrcRace", "OrcRaceVampire" } },
-        { "OrcRaceVampire", new List<string> { "OrcRace", "OrcRaceVampire" } },
-        { "ElderRace", new List<string> { "ElderRace", "ElderRaceVampire" } },
-        { "ElderRaceVampire", new List<string> { "ElderRace", "ElderRaceVampire" } },
-        { "DremoraRace", new List<string> { "DremoraRace" } },
-        { "DA13AfflictedRace", new List<string> { "DA13AfflictedRace" } }
-    };
+                throw new Exception("SkyLady Race Compatibility.txt is empty or invalid. At least one valid race mapping is required.");
             }
 
             // Validate race EditorIDs against the load order
@@ -433,156 +610,91 @@ namespace SkyLady.SkyLady
             raceCompatibilityMap = validatedRaceCompatibilityMap;
             Console.WriteLine($"Race compatibility map validation complete. {raceCompatibilityMap.Count} valid race entries remain.");
 
-            // Voice compatibility mapping - Load from SkyLady Voice Compatibility.txt if it exists
+            // Voice compatibility mapping - Load from SkyLady Voice Compatibility.txt
             var voiceTypeMap = new Dictionary<string, List<string>>();
             var raceVoiceFallbacks = new Dictionary<string, List<string>>();
-            var voiceCompatibilityPath = Path.Combine(modFolderPath, "SkyLady Voice Compatibility.txt");
-            if (File.Exists(voiceCompatibilityPath))
+            try
             {
-                try
+                var lines = File.ReadAllLines(voiceCompatibilityPath);
+                bool parsingVoiceMap = false;
+                bool parsingRaceFallbacks = false;
+
+                foreach (var line in lines)
                 {
-                    var lines = File.ReadAllLines(voiceCompatibilityPath);
-                    bool parsingVoiceMap = false;
-                    bool parsingRaceFallbacks = false;
+                    var trimmedLine = line.Trim();
+                    if (string.IsNullOrEmpty(trimmedLine) || trimmedLine.StartsWith("#")) continue;
 
-                    foreach (var line in lines)
+                    if (trimmedLine.Equals("[VoiceMap]", StringComparison.OrdinalIgnoreCase))
                     {
-                        var trimmedLine = line.Trim();
-                        if (string.IsNullOrEmpty(trimmedLine) || trimmedLine.StartsWith("#")) continue;
+                        parsingVoiceMap = true;
+                        parsingRaceFallbacks = false;
+                        continue;
+                    }
+                    else if (trimmedLine.Equals("[RaceVoiceFallbacks]", StringComparison.OrdinalIgnoreCase))
+                    {
+                        parsingVoiceMap = false;
+                        parsingRaceFallbacks = true;
+                        continue;
+                    }
 
-                        if (trimmedLine.Equals("[VoiceMap]", StringComparison.OrdinalIgnoreCase))
+                    if (parsingVoiceMap)
+                    {
+                        var parts = trimmedLine.Split(':');
+                        if (parts.Length != 2)
                         {
-                            parsingVoiceMap = true;
-                            parsingRaceFallbacks = false;
+                            Console.WriteLine($"Invalid voice map entry in SkyLady Voice Compatibility.txt: {trimmedLine}. Expected format: MaleVoice: FemaleVoice1, FemaleVoice2, ...");
                             continue;
                         }
-                        else if (trimmedLine.Equals("[RaceVoiceFallbacks]", StringComparison.OrdinalIgnoreCase))
+
+                        var maleVoice = parts[0].Trim();
+                        var femaleVoices = parts[1].Split(',')
+                            .Select(v => v.Trim())
+                            .Where(v => !string.IsNullOrEmpty(v))
+                            .ToList();
+
+                        if (femaleVoices.Count == 0)
                         {
-                            parsingVoiceMap = false;
-                            parsingRaceFallbacks = true;
+                            Console.WriteLine($"No female voices defined for {maleVoice} in SkyLady Voice Compatibility.txt. Skipping entry.");
                             continue;
                         }
 
-                        if (parsingVoiceMap)
+                        voiceTypeMap[maleVoice] = femaleVoices;
+                        Console.WriteLine($"Loaded voice mapping for {maleVoice}: {string.Join(", ", femaleVoices)}");
+                    }
+                    else if (parsingRaceFallbacks)
+                    {
+                        var parts = trimmedLine.Split(':');
+                        if (parts.Length != 2)
                         {
-                            var parts = trimmedLine.Split(':');
-                            if (parts.Length != 2)
-                            {
-                                Console.WriteLine($"Invalid voice map entry in SkyLady Voice Compatibility.txt: {trimmedLine}. Expected format: MaleVoice: FemaleVoice1, FemaleVoice2, ...");
-                                continue;
-                            }
-
-                            var maleVoice = parts[0].Trim();
-                            var femaleVoices = parts[1].Split(',')
-                                .Select(v => v.Trim())
-                                .Where(v => !string.IsNullOrEmpty(v))
-                                .ToList();
-
-                            if (femaleVoices.Count == 0)
-                            {
-                                Console.WriteLine($"No female voices defined for {maleVoice} in SkyLady Voice Compatibility.txt. Skipping entry.");
-                                continue;
-                            }
-
-                            voiceTypeMap[maleVoice] = femaleVoices;
-                            Console.WriteLine($"Loaded voice mapping for {maleVoice}: {string.Join(", ", femaleVoices)}");
+                            Console.WriteLine($"Invalid race voice fallback entry in SkyLady Voice Compatibility.txt: {trimmedLine}. Expected format: Race: Voice1, Voice2, ...");
+                            continue;
                         }
-                        else if (parsingRaceFallbacks)
+
+                        var race = parts[0].Trim();
+                        var voices = parts[1].Split(',')
+                            .Select(v => v.Trim())
+                            .Where(v => !string.IsNullOrEmpty(v))
+                            .ToList();
+
+                        if (voices.Count == 0)
                         {
-                            var parts = trimmedLine.Split(':');
-                            if (parts.Length != 2)
-                            {
-                                Console.WriteLine($"Invalid race voice fallback entry in SkyLady Voice Compatibility.txt: {trimmedLine}. Expected format: Race: Voice1, Voice2, ...");
-                                continue;
-                            }
-
-                            var race = parts[0].Trim();
-                            var voices = parts[1].Split(',')
-                                .Select(v => v.Trim())
-                                .Where(v => !string.IsNullOrEmpty(v))
-                                .ToList();
-
-                            if (voices.Count == 0)
-                            {
-                                Console.WriteLine($"No voices defined for race {race} in SkyLady Voice Compatibility.txt. Skipping entry.");
-                                continue;
-                            }
-
-                            raceVoiceFallbacks[race] = voices;
-                            Console.WriteLine($"Loaded race voice fallbacks for {race}: {string.Join(", ", voices)}");
+                            Console.WriteLine($"No voices defined for race {race} in SkyLady Voice Compatibility.txt. Skipping entry.");
+                            continue;
                         }
+
+                        raceVoiceFallbacks[race] = voices;
+                        Console.WriteLine($"Loaded race voice fallbacks for {race}: {string.Join(", ", voices)}");
                     }
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error reading SkyLady Voice Compatibility.txt: {ex.Message}. Falling back to default voice mappings.");
-                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error reading SkyLady Voice Compatibility.txt at {voiceCompatibilityPath}. Ensure the file is accessible: {ex.Message}");
             }
 
-            // If the file doesn't exist or failed to load, use the default hardcoded mappings
-            if (voiceTypeMap.Count == 0)
+            if (voiceTypeMap.Count == 0 && raceVoiceFallbacks.Count == 0)
             {
-                Console.WriteLine("Using default voice type map.");
-                voiceTypeMap = new Dictionary<string, List<string>>
-    {
-        { "MaleArgonian", new List<string> { "FemaleArgonian" } },
-        { "MaleBandit", new List<string> { "FemaleCommoner" } },
-        { "MaleBrute", new List<string> { "FemaleCommander" } },
-        { "MaleChild", new List<string> { "FemaleChild" } },
-        { "MaleCommander", new List<string> { "FemaleCommander" } },
-        { "MaleCommoner", new List<string> { "FemaleCommoner" } },
-        { "MaleCommonerAccented", new List<string> { "FemaleCommoner" } },
-        { "MaleCondescending", new List<string> { "FemaleCondescending" } },
-        { "MaleCoward", new List<string> { "FemaleCoward" } },
-        { "MaleDarkElf", new List<string> { "FemaleDarkElf" } },
-        { "MaleDrunk", new List<string> { "FemaleSultry" } },
-        { "MaleElfHaughty", new List<string> { "FemaleElfHaughty" } },
-        { "MaleEvenToned", new List<string> { "FemaleEvenToned" } },
-        { "MaleEvenTonedAccented", new List<string> { "FemaleEvenToned" } },
-        { "MaleGuard", new List<string> { "FemaleCommander" } },
-        { "MaleKhajiit", new List<string> { "FemaleKhajiit" } },
-        { "MaleNord", new List<string> { "FemaleNord" } },
-        { "MaleNordCommander", new List<string> { "FemaleNord" } },
-        { "MaleOldGrumpy", new List<string> { "FemaleOldGrumpy" } },
-        { "MaleOldKindly", new List<string> { "FemaleOldKindly" } },
-        { "MaleOrc", new List<string> { "FemaleOrc" } },
-        { "MaleSlyCynical", new List<string> { "FemaleSultry" } },
-        { "MaleSoldier", new List<string> { "FemaleCommander" } },
-        { "MaleUniqueGhost", new List<string> { "FemaleUniqueGhost" } },
-        { "MaleWarlock", new List<string> { "FemaleCondescending" } },
-        { "MaleYoungEager", new List<string> { "FemaleYoungEager" } },
-        { "DLC1MaleVampire", new List<string> { "DLC1FemaleVampire" } },
-        { "DLC2MaleDarkElfCommoner", new List<string> { "DLC2FemaleDarkElfCommoner" } },
-        { "DLC2MaleDarkElfCynical", new List<string> { "FemaleDarkElf" } }
-    };
-            }
-
-            if (raceVoiceFallbacks.Count == 0)
-            {
-                Console.WriteLine("Using default race voice fallbacks.");
-                raceVoiceFallbacks = new Dictionary<string, List<string>>
-    {
-        { "NordRace", new List<string> { "FemaleNord", "FemaleEvenToned", "FemaleCommander" } },
-        { "NordRaceVampire", new List<string> { "FemaleNord", "FemaleEvenToned", "FemaleCommander" } },
-        { "DarkElfRace", new List<string> { "FemaleDarkElf", "DLC2FemaleDarkElfCommoner", "FemaleCondescending" } },
-        { "DarkElfRaceVampire", new List<string> { "FemaleDarkElf", "DLC2FemaleDarkElfCommoner", "FemaleCondescending" } },
-        { "ArgonianRace", new List<string> { "FemaleArgonian", "FemaleSultry" } },
-        { "ArgonianRaceVampire", new List<string> { "FemaleArgonian", "FemaleSultry" } },
-        { "KhajiitRace", new List<string> { "FemaleKhajiit", "FemaleSultry" } },
-        { "KhajiitRaceVampire", new List<string> { "FemaleKhajiit", "FemaleSultry" } },
-        { "HighElfRace", new List<string> { "FemaleElfHaughty", "FemaleEvenToned" } },
-        { "HighElfRaceVampire", new List<string> { "FemaleElfHaughty", "FemaleEvenToned" } },
-        { "WoodElfRace", new List<string> { "FemaleEvenToned", "FemaleYoungEager" } },
-        { "WoodElfRaceVampire", new List<string> { "FemaleEvenToned", "FemaleYoungEager" } },
-        { "BretonRace", new List<string> { "FemaleEvenToned", "FemaleYoungEager" } },
-        { "BretonRaceVampire", new List<string> { "FemaleEvenToned", "FemaleYoungEager" } },
-        { "ImperialRace", new List<string> { "FemaleEvenToned", "FemaleCommander" } },
-        { "ImperialRaceVampire", new List<string> { "FemaleEvenToned", "FemaleCommander" } },
-        { "RedguardRace", new List<string> { "FemaleEvenToned", "FemaleSultry" } },
-        { "RedguardRaceVampire", new List<string> { "FemaleEvenToned", "FemaleSultry" } },
-        { "OrcRace", new List<string> { "FemaleOrc", "FemaleCommander" } },
-        { "OrcRaceVampire", new List<string> { "FemaleOrc", "FemaleCommander" } }
-    };
+                throw new Exception("SkyLady Voice Compatibility.txt is empty or invalid. At least one valid voice mapping or fallback is required.");
             }
 
             // Collect female templates and count male NPCs (excluding Player and presets)
@@ -715,9 +827,7 @@ namespace SkyLady.SkyLady
                 if (templates.Count == 0 && settings.UseDefaultRaceFallback)
                 {
                     Console.WriteLine($"No templates found for race {race} for NPC {npc.EditorID ?? "Unnamed"} ({npc.FormKey}). Using default race fallback (NordRace, ImperialRace).");
-                    templates = new List<string> { "NordRace", "ImperialRace" }
-                        .SelectMany(r => femaleTemplatesByRace.TryGetValue(r, out var t) ? t : [])
-                        .ToList();
+                    templates = [.. new List<string> { "NordRace", "ImperialRace" }.SelectMany(r => femaleTemplatesByRace.TryGetValue(r, out var t) ? t : [])];
                 }
 
                 if (templates.Count > 0)

@@ -1,23 +1,45 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+
+
 	<PropertyGroup>
+
 		<TargetFramework>net8.0</TargetFramework>
+
 		<ImplicitUsings>enable</ImplicitUsings>
+
 		<Nullable>enable</Nullable>
-		<OutputType>Library</OutputType>
-		<SynthesisPatcher>true</SynthesisPatcher>
+
+		<BaseOutputPath>G:\LoreRim\mods\SkyLady\bin\debug</BaseOutputPath>
+
+		<OutputType>Exe</OutputType>
+
 		<AssemblyName>SkyLady</AssemblyName>
+
 		<RootNamespace>SkyLady</RootNamespace>
+
 	</PropertyGroup>
 
-	<ItemGroup>
-		<PackageReference Include="Mutagen.Bethesda.Skyrim" />
-		<PackageReference Include="Mutagen.Bethesda.Synthesis" />
-	</ItemGroup>
+
 
 	<ItemGroup>
-		<ProjectReference Include="..\Mutagen.Bethesda.Synthesis\Mutagen.Bethesda.Synthesis.csproj" />
-		<ProjectReference Include="..\Synthesis.Bethesda\Synthesis.Bethesda.csproj" />
+
+		<PackageReference Include="Mutagen.Bethesda.Skyrim" />
+
+		<PackageReference Include="Mutagen.Bethesda.Synthesis" />
+
 	</ItemGroup>
+
+
+
+	<ItemGroup>
+
+		<ProjectReference Include="..\Mutagen.Bethesda.Synthesis\Mutagen.Bethesda.Synthesis.csproj" />
+
+		<ProjectReference Include="..\Synthesis.Bethesda\Synthesis.Bethesda.csproj" />
+
+	</ItemGroup>
+
+
 
 </Project>
