@@ -1,11 +1,12 @@
 {
   "Nickname": "SkyLady",
-  "Visibility": "Exclude",
-  "OneLineDescription": "Feminizes male NPCs in Skyrim",
-  "LongDescription": "A WIP patcher that copies female NPC appearance data to male NPCs, including facegen files.",
+  "Visibility": "Visible",
+  "OneLineDescription": "Turns male NPCs into females.",
+  "LongDescription": "SkyLady patches male NPCs to use female NPC appearances, including facegen, head parts, voices, and Female flags. Supports custom races with configurable settings via text files created automatically in your mod folder. Compatible with Skyrim SE, AE, and VR.",
   "PreferredAutoVersioning": "Default",
   "RequiredMods": [],
   "TargetedReleases": [
-    "SkyrimSE"
+    "SkyrimSE",
+    "SkyrimVR"
   ]
 }
