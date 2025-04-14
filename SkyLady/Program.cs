@@ -604,10 +604,9 @@ namespace SkyLady.SkyLady
                                               npc.FormKey.ModKey.FileName.Equals("Dragonborn.esm") ||
                                               npc.FormKey.ModKey.FileName.Equals("Update.esm") ||
                                               npc.FormKey.ModKey.FileName.Equals("HearthFires.esm");
-                        bool isAfflicted = race == "DA13AfflictedRace";
                         bool notBlacklisted = !blacklistedMods.Contains(npc.FormKey.ModKey.FileName);
                         var (nifExists, ddsExists) = facegenCache[(npc.FormKey.ModKey.FileName.ToString(), npc.FormKey.IDString())];
-                        bool condition = isVanillaPlugin || (notBlacklisted && nifExists && ddsExists);
+                        bool condition = notBlacklisted && (isVanillaPlugin || (nifExists && ddsExists));
                         if (condition)
                         {
                             femaleTemplatesByRace[race] = femaleTemplatesByRace.GetValueOrDefault(race, []);
