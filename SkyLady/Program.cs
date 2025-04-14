@@ -192,6 +192,35 @@ namespace SkyLady.SkyLady
                 Console.WriteLine($"Created default SkyLady mod folder at {modFolderPath}.");
             }
 
+            // Clear previous facegen files before patching
+            try
+            {
+                var facegeomPath = Path.Combine(modFolderPath, "meshes", "actors", "character", "facegendata", "facegeom");
+                var facetintPath = Path.Combine(modFolderPath, "textures", "actors", "character", "facegendata", "facetint");
+
+                if (Directory.Exists(facegeomPath))
+                {
+                    foreach (var dir in Directory.GetDirectories(facegeomPath))
+                    {
+                        Directory.Delete(dir, true);
+                    }
+                }
+
+                if (Directory.Exists(facetintPath))
+                {
+                    foreach (var dir in Directory.GetDirectories(facetintPath))
+                    {
+                        Directory.Delete(dir, true);
+                    }
+                }
+
+                Console.WriteLine("Cleared previous facegen files before patching.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Warning: Failed to clear previous facegen files: {ex.Message}. Continuing with patching.");
+            }
+
             // Define paths using the mod folder
             var racesPath = Path.Combine(modFolderPath, "SkyLady races.txt");
             var raceCompatibilityPath = Path.Combine(modFolderPath, "SkyLady Race Compatibility.txt");
@@ -207,40 +236,40 @@ namespace SkyLady.SkyLady
                     File.WriteAllLines(racesPath,
                     [
                         "# SkyLady Races Configuration",
-                        "# Lists the races eligible for patching by SkyLady (e.g., NordRace, ArgonianRace).",
-                        "# Format: One race EditorID per line.",
-                        "# These races determine which NPCs can be transformed with female templates.",
-                        "# Add custom races from mods to include them, or remove races to exclude.",
-                        "# Back up this file before editing.",
-                        "# Lines starting with # or empty lines are ignored.",
-                        "",
-                        "ArgonianRace",
-                        "BretonRace",
-                        "DarkElfRace",
-                        "DremoraRace",
-                        "ElderRace",
-                        "HighElfRace",
-                        "ImperialRace",
-                        "KhajiitRace",
-                        "NordRace",
-                        "OrcRace",
-                        "RedguardRace",
-                        "WoodElfRace",
-                        "ArgonianRaceVampire",
-                        "BretonRaceVampire",
-                        "DarkElfRaceVampire",
-                        "ElderRaceVampire",
-                        "HighElfRaceVampire",
-                        "ImperialRaceVampire",
-                        "NordRaceVampire",
-                        "KhajiitRaceVampire",
-                        "OrcRaceVampire",
-                        "RedguardRaceVampire",
-                        "WoodElfRaceVampire",
-                        "DA13AfflictedRace",
-                        "COTRRace",
-                        "ArgonianRaceKZ",
-                        "KhajiitRaceKZ"
+                    "# Lists the races eligible for patching by SkyLady (e.g., NordRace, ArgonianRace).",
+                    "# Format: One race EditorID per line.",
+                    "# These races determine which NPCs can be transformed with female templates.",
+                    "# Add custom races from mods to include them, or remove races to exclude.",
+                    "# Back up this file before editing.",
+                    "# Lines starting with # or empty lines are ignored.",
+                    "",
+                    "ArgonianRace",
+                    "BretonRace",
+                    "DarkElfRace",
+                    "DremoraRace",
+                    "ElderRace",
+                    "HighElfRace",
+                    "ImperialRace",
+                    "KhajiitRace",
+                    "NordRace",
+                    "OrcRace",
+                    "RedguardRace",
+                    "WoodElfRace",
+                    "ArgonianRaceVampire",
+                    "BretonRaceVampire",
+                    "DarkElfRaceVampire",
+                    "ElderRaceVampire",
+                    "HighElfRaceVampire",
+                    "ImperialRaceVampire",
+                    "NordRaceVampire",
+                    "KhajiitRaceVampire",
+                    "OrcRaceVampire",
+                    "RedguardRaceVampire",
+                    "WoodElfRaceVampire",
+                    "DA13AfflictedRace",
+                    "COTRRace",
+                    "ArgonianRaceKZ",
+                    "KhajiitRaceKZ"
                     ]);
                     Console.WriteLine($"Created default SkyLady races.txt at {racesPath}.");
                 }
@@ -257,24 +286,24 @@ namespace SkyLady.SkyLady
                     File.WriteAllLines(partsToCopyPath,
                     [
                         "# SkyLady Parts to Copy Configuration",
-                        "# Lists NPC appearance components to copy from female templates (e.g., PNAM, Tint Layers).",
-                        "# Format: One component identifier per line.",
-                        "# These settings control which visual aspects are applied to patched NPCs.",
-                        "# Adjusting these is not recommended, as it may cause unintended behavior.",
-                        "# Back up this file before editing.",
-                        "# Lines starting with # or empty lines are ignored.",
-                        "",
-                        "PNAM",
-                        "HEDP",
-                        "WNAM",
-                        "QNAM",
-                        "NAM9",
-                        "NAMA",
-                        "Tint Layers",
-                        "FTST",
-                        "HCLF",
-                        "NAM7",
-                        "NAM6"
+                    "# Lists NPC appearance components to copy from female templates (e.g., PNAM, Tint Layers).",
+                    "# Format: One component identifier per line.",
+                    "# These settings control which visual aspects are applied to patched NPCs.",
+                    "# Adjusting these is not recommended, as it may cause unintended behavior.",
+                    "# Back up this file before editing.",
+                    "# Lines starting with # or empty lines are ignored.",
+                    "",
+                    "PNAM",
+                    "HEDP",
+                    "WNAM",
+                    "QNAM",
+                    "NAM9",
+                    "NAMA",
+                    "Tint Layers",
+                    "FTST",
+                    "HCLF",
+                    "NAM7",
+                    "NAM6"
                     ]);
                     Console.WriteLine($"Created default SkyLady partsToCopy.txt at {partsToCopyPath}.");
                 }
@@ -291,40 +320,40 @@ namespace SkyLady.SkyLady
                     File.WriteAllLines(raceCompatibilityPath,
                     [
                         "# SkyLady Race Compatibility Configuration",
-                        "# Defines which races can share female templates (e.g., NordRace: NordRace, ImperialRace).",
-                        "# Format: Race: CompatibleRace1, CompatibleRace2, ...",
-                        "# Controls template matching for patched NPCs; broader mappings increase variety.",
-                        "# Add mod races or adjust mappings to suit your load order.",
-                        "# Back up this file before editing.",
-                        "# Lines starting with # or empty lines are ignored.",
-                        "",
-                        "NordRace: NordRace",
-                        "NordRaceVampire: NordRace, NordRaceVampire",
-                        "ImperialRace: ImperialRace",
-                        "ImperialRaceVampire: ImperialRace, ImperialRaceVampire",
-                        "DarkElfRace: DarkElfRace, _00DwemerRace, MASNerevarineRace",
-                        "DarkElfRaceVampire: DarkElfRace, DarkElfRaceVampire, _00DwemerRace, MASNerevarineRace",
-                        "ArgonianRace: ArgonianRace",
-                        "ArgonianRaceVampire: ArgonianRace, ArgonianRaceVampire",
-                        "KhajiitRace: KhajiitRace",
-                        "KhajiitRaceVampire: KhajiitRace, KhajiitRaceVampire",
-                        "HighElfRace: HighElfRace",
-                        "HighElfRaceVampire: HighElfRace, HighElfRaceVampire",
-                        "WoodElfRace: WoodElfRace",
-                        "WoodElfRaceVampire: WoodElfRace, WoodElfRaceVampire",
-                        "BretonRace: BretonRace",
-                        "BretonRaceVampire: BretonRace, BretonRaceVampire",
-                        "RedguardRace: RedguardRace",
-                        "RedguardRaceVampire: RedguardRace, RedguardRaceVampire",
-                        "OrcRace: OrcRace",
-                        "OrcRaceVampire: OrcRace, OrcRaceVampire",
-                        "ElderRace: ElderRace",
-                        "ElderRaceVampire: ElderRace, ElderRaceVampire",
-                        "DremoraRace: DremoraRace",
-                        "DA13AfflictedRace: DA13AfflictedRace",
-                        "COTRRace: COTRRace, NordRace, ImperialRace",
-                        "ArgonianRaceKZ: ArgonianRaceKZ",
-                        "KhajiitRaceKZ: KhajittRaceKZ"
+                    "# Defines which races can share female templates (e.g., NordRace: NordRace, ImperialRace).",
+                    "# Format: Race: CompatibleRace1, CompatibleRace2, ...",
+                    "# Controls template matching for patched NPCs; broader mappings increase variety.",
+                    "# Add mod races or adjust mappings to suit your load order.",
+                    "# Back up this file before editing.",
+                    "# Lines starting with # or empty lines are ignored.",
+                    "",
+                    "NordRace: NordRace",
+                    "NordRaceVampire: NordRace, NordRaceVampire",
+                    "ImperialRace: ImperialRace",
+                    "ImperialRaceVampire: ImperialRace, ImperialRaceVampire",
+                    "DarkElfRace: DarkElfRace, _00DwemerRace, MASNerevarineRace",
+                    "DarkElfRaceVampire: DarkElfRace, DarkElfRaceVampire, _00DwemerRace, MASNerevarineRace",
+                    "ArgonianRace: ArgonianRace",
+                    "ArgonianRaceVampire: ArgonianRace, ArgonianRaceVampire",
+                    "KhajiitRace: KhajiitRace",
+                    "KhajiitRaceVampire: KhajiitRace, KhajiitRaceVampire",
+                    "HighElfRace: HighElfRace",
+                    "HighElfRaceVampire: HighElfRace, HighElfRaceVampire",
+                    "WoodElfRace: WoodElfRace",
+                    "WoodElfRaceVampire: WoodElfRace, WoodElfRaceVampire",
+                    "BretonRace: BretonRace",
+                    "BretonRaceVampire: BretonRace, BretonRaceVampire",
+                    "RedguardRace: RedguardRace",
+                    "RedguardRaceVampire: RedguardRace, RedguardRaceVampire",
+                    "OrcRace: OrcRace",
+                    "OrcRaceVampire: OrcRace, OrcRaceVampire",
+                    "ElderRace: ElderRace",
+                    "ElderRaceVampire: ElderRace, ElderRaceVampire",
+                    "DremoraRace: DremoraRace",
+                    "DA13AfflictedRace: DA13AfflictedRace",
+                    "COTRRace: COTRRace, NordRace, ImperialRace",
+                    "ArgonianRaceKZ: ArgonianRaceKZ",
+                    "KhajiitRaceKZ: KhajittRaceKZ"
                     ]);
                     Console.WriteLine($"Created default SkyLady Race Compatibility.txt at {raceCompatibilityPath}.");
                 }
@@ -341,64 +370,64 @@ namespace SkyLady.SkyLady
                     File.WriteAllLines(voiceCompatibilityPath,
                     [
                         "# SkyLady Voice Compatibility Configuration",
-                        "# Format:",
-                        "# [VoiceMap] for male-to-female voice mappings. If an NPC used a male voice on the left side before using SkyLady, it will end up with the female voice on the right side.",
-                        "# [RaceVoiceFallbacks] for race-specific fallback voices. If an NPC of the race on the left side contains a voice not mapped in [VoiceMap] section, it will randomly choose one of the race's voices on the right side.",
-                        "# Back up this file before editing.",
-                        "# Lines starting with # or empty lines are ignored.",
-                        "",
-                        "[VoiceMap]",
-                        "MaleArgonian: FemaleArgonian",
-                        "MaleBandit: FemaleCommoner",
-                        "MaleBrute: FemaleCommander",
-                        "MaleChild: FemaleChild",
-                        "MaleCommander: FemaleCommander",
-                        "MaleCommoner: FemaleCommoner",
-                        "MaleCommonerAccented: FemaleCommoner",
-                        "MaleCondescending: FemaleCondescending",
-                        "MaleCoward: FemaleCoward",
-                        "MaleDarkElf: FemaleDarkElf",
-                        "MaleDrunk: FemaleSultry",
-                        "MaleElfHaughty: FemaleElfHaughty",
-                        "MaleEvenToned: FemaleEvenToned",
-                        "MaleEvenTonedAccented: FemaleEvenToned",
-                        "MaleGuard: FemaleCommander",
-                        "MaleKhajiit: FemaleKhajiit",
-                        "MaleNord: FemaleNord",
-                        "MaleNordCommander: FemaleNord",
-                        "MaleOldGrumpy: FemaleOldGrumpy",
-                        "MaleOldKindly: FemaleOldKindly",
-                        "MaleOrc: FemaleOrc",
-                        "MaleSlyCynical: FemaleSultry",
-                        "MaleSoldier: FemaleCommander",
-                        "MaleUniqueGhost: FemaleUniqueGhost",
-                        "MaleWarlock: FemaleCondescending",
-                        "MaleYoungEager: FemaleYoungEager",
-                        "DLC1MaleVampire: DLC1FemaleVampire",
-                        "DLC2MaleDarkElfCommoner: DLC2FemaleDarkElfCommoner",
-                        "DLC2MaleDarkElfCynical: FemaleDarkElf",
-                        "",
-                        "[RaceVoiceFallbacks]",
-                        "NordRace: FemaleNord, FemaleEvenToned, FemaleCommander",
-                        "NordRaceVampire: FemaleNord, FemaleEvenToned, FemaleCommander",
-                        "DarkElfRace: FemaleDarkElf, DLC2FemaleDarkElfCommoner, FemaleCondescending",
-                        "DarkElfRaceVampire: FemaleDarkElf, DLC2FemaleDarkElfCommoner, FemaleCondescending",
-                        "ArgonianRace: FemaleArgonian, FemaleSultry",
-                        "ArgonianRaceVampire: FemaleArgonian, FemaleSultry",
-                        "KhajiitRace: FemaleKhajiit, FemaleSultry",
-                        "KhajiitRaceVampire: FemaleKhajiit, FemaleSultry",
-                        "HighElfRace: FemaleElfHaughty, FemaleEvenToned",
-                        "HighElfRaceVampire: FemaleElfHaughty, FemaleEvenToned",
-                        "WoodElfRace: FemaleEvenToned, FemaleYoungEager",
-                        "WoodElfRaceVampire: FemaleEvenToned, FemaleYoungEager",
-                        "BretonRace: FemaleEvenToned, FemaleYoungEager",
-                        "BretonRaceVampire: FemaleEvenToned, FemaleYoungEager",
-                        "ImperialRace: FemaleEvenToned, FemaleCommander",
-                        "ImperialRaceVampire: FemaleEvenToned, FemaleCommander",
-                        "RedguardRace: FemaleEvenToned, FemaleSultry",
-                        "RedguardRaceVampire: FemaleEvenToned, FemaleSultry",
-                        "OrcRace: FemaleOrc, FemaleCommander",
-                        "OrcRaceVampire: FemaleOrc, FemaleCommander"
+                    "# Format:",
+                    "# [VoiceMap] for male-to-female voice mappings. If an NPC used a male voice on the left side before using SkyLady, it will end up with the female voice on the right side.",
+                    "# [RaceVoiceFallbacks] for race-specific fallback voices. If an NPC of the race on the left side contains a voice not mapped in [VoiceMap] section, it will randomly choose one of the race's voices on the right side.",
+                    "# Back up this file before editing.",
+                    "# Lines starting with # or empty lines are ignored.",
+                    "",
+                    "[VoiceMap]",
+                    "MaleArgonian: FemaleArgonian",
+                    "MaleBandit: FemaleCommoner",
+                    "MaleBrute: FemaleCommander",
+                    "MaleChild: FemaleChild",
+                    "MaleCommander: FemaleCommander",
+                    "MaleCommoner: FemaleCommoner",
+                    "MaleCommonerAccented: FemaleCommoner",
+                    "MaleCondescending: FemaleCondescending",
+                    "MaleCoward: FemaleCoward",
+                    "MaleDarkElf: FemaleDarkElf",
+                    "MaleDrunk: FemaleSultry",
+                    "MaleElfHaughty: FemaleElfHaughty",
+                    "MaleEvenToned: FemaleEvenToned",
+                    "MaleEvenTonedAccented: FemaleEvenToned",
+                    "MaleGuard: FemaleCommander",
+                    "MaleKhajiit: FemaleKhajiit",
+                    "MaleNord: FemaleNord",
+                    "MaleNordCommander: FemaleNord",
+                    "MaleOldGrumpy: FemaleOldGrumpy",
+                    "MaleOldKindly: FemaleOldKindly",
+                    "MaleOrc: FemaleOrc",
+                    "MaleSlyCynical: FemaleSultry",
+                    "MaleSoldier: FemaleCommander",
+                    "MaleUniqueGhost: FemaleUniqueGhost",
+                    "MaleWarlock: FemaleCondescending",
+                    "MaleYoungEager: FemaleYoungEager",
+                    "DLC1MaleVampire: DLC1FemaleVampire",
+                    "DLC2MaleDarkElfCommoner: DLC2FemaleDarkElfCommoner",
+                    "DLC2MaleDarkElfCynical: FemaleDarkElf",
+                    "",
+                    "[RaceVoiceFallbacks]",
+                    "NordRace: FemaleNord, FemaleEvenToned, FemaleCommander",
+                    "NordRaceVampire: FemaleNord, FemaleEvenToned, FemaleCommander",
+                    "DarkElfRace: FemaleDarkElf, DLC2FemaleDarkElfCommoner, FemaleCondescending",
+                    "DarkElfRaceVampire: FemaleDarkElf, DLC2FemaleDarkElfCommoner, FemaleCondescending",
+                    "ArgonianRace: FemaleArgonian, FemaleSultry",
+                    "ArgonianRaceVampire: FemaleArgonian, FemaleSultry",
+                    "KhajiitRace: FemaleKhajiit, FemaleSultry",
+                    "KhajiitRaceVampire: FemaleKhajiit, FemaleSultry",
+                    "HighElfRace: FemaleElfHaughty, FemaleEvenToned",
+                    "HighElfRaceVampire: FemaleElfHaughty, FemaleEvenToned",
+                    "WoodElfRace: FemaleEvenToned, FemaleYoungEager",
+                    "WoodElfRaceVampire: FemaleEvenToned, FemaleYoungEager",
+                    "BretonRace: FemaleEvenToned, FemaleYoungEager",
+                    "BretonRaceVampire: FemaleEvenToned, FemaleYoungEager",
+                    "ImperialRace: FemaleEvenToned, FemaleCommander",
+                    "ImperialRaceVampire: FemaleEvenToned, FemaleCommander",
+                    "RedguardRace: FemaleEvenToned, FemaleSultry",
+                    "RedguardRaceVampire: FemaleEvenToned, FemaleSultry",
+                    "OrcRace: FemaleOrc, FemaleCommander",
+                    "OrcRaceVampire: FemaleOrc, FemaleCommander"
                     ]);
                     Console.WriteLine($"Created default SkyLady Voice Compatibility.txt at {voiceCompatibilityPath}.");
                 }
@@ -792,26 +821,34 @@ namespace SkyLady.SkyLady
                 }
 
                 bool shouldPatchNew = true;
-                if (!patchEntireLoadOrder && !requiemKeys.Contains(npc.FormKey.ModKey))
-                    continue;
+                bool isLocked = lockedNpcs.ContainsKey(npc.FormKey);
 
-                if (settings.PatchSingleNpcOnly)
+                // Skip mode and blacklist checks for locked NPCs
+                if (!isLocked)
                 {
-                    if (!settings.NpcsToPatch.Any(n => n.Npc.FormKey == npc.FormKey))
-                    {
-                        shouldPatchNew = false;
-                    }
-                }
-                else
-                {
-                    if (settings.PreserveLastRunAppearances)
-                    {
-                        shouldPatchNew = false;
-                    }
-                }
+                    if (!patchEntireLoadOrder && !requiemKeys.Contains(npc.FormKey.ModKey))
+                        continue;
 
-                if (settings.ModsToExcludeFromPatching.Contains(npc.FormKey.ModKey)) continue;
-                if (settings.NpcsToExcludeFromPatching.Any(ex => ex.FormKey == npc.FormKey)) continue;
+                    if (settings.PatchSingleNpcOnly)
+                    {
+                        if (!settings.NpcsToPatch.Any(n => n.Npc.FormKey == npc.FormKey))
+                        {
+                            shouldPatchNew = false;
+                        }
+                    }
+                    else
+                    {
+                        if (settings.PreserveLastRunAppearances)
+                        {
+                            shouldPatchNew = false;
+                        }
+                    }
+
+                    if (settings.ModsToExcludeFromPatching.Contains(npc.FormKey.ModKey))
+                        continue;
+                    if (settings.NpcsToExcludeFromPatching.Any(ex => ex.FormKey == npc.FormKey))
+                        continue;
+                }
 
                 var npcFid = npc.FormKey.IDString();
                 if (race == "DA13AfflictedRace")
@@ -837,7 +874,7 @@ namespace SkyLady.SkyLady
                     bool facegenCopied = false;
                     Npc? patchedNpc = null;
 
-                    if (lockedNpcs.TryGetValue(npc.FormKey, out var lockedEntry) || !shouldPatchNew)
+                    if (isLocked || !shouldPatchNew)
                     {
                         if (tempTemplates.TryGetValue(npc.FormKey.ToString(), out var tempTemplateKey)
                             && FormKey.TryFactory(tempTemplateKey, out var tempFormKey)
@@ -848,16 +885,16 @@ namespace SkyLady.SkyLady
                             {
                                 template = tempLockedTemplate;
                                 useLockedTemplate = true;
-                                Console.WriteLine($"[{(lockedNpcs.ContainsKey(npc.FormKey) ? "Locked" : "Preserved")}] Reusing temp template for {npc.EditorID ?? "Unnamed"}: {template.EditorID ?? "Unnamed"} ({template.FormKey}) from {template.FormKey.ModKey.FileName}");
+                                Console.WriteLine($"[{(isLocked ? "Locked" : "Preserved")}] Reusing temp template for {npc.EditorID ?? "Unnamed"}: {template.EditorID ?? "Unnamed"} ({template.FormKey}) from {template.FormKey.ModKey.FileName}");
                             }
                             else
                             {
-                                Console.WriteLine($"[{(lockedNpcs.ContainsKey(npc.FormKey) ? "Locked" : "Preserved")}] Temp template {tempTemplateKey} is invalid for {npc.EditorID ?? "Unnamed"} (race {race}). Will assign new template now.");
+                                Console.WriteLine($"[{(isLocked ? "Locked" : "Preserved")}] Temp template {tempTemplateKey} is invalid for {npc.EditorID ?? "Unnamed"} (race {race}). Will assign new template now.");
                             }
                         }
                         else
                         {
-                            Console.WriteLine($"[{(lockedNpcs.ContainsKey(npc.FormKey) ? "Locked" : "Preserved")}] No valid temp template found for {npc.EditorID ?? "Unnamed"}. Will assign new template now.");
+                            Console.WriteLine($"[{(isLocked ? "Locked" : "Preserved")}] No valid temp template found for {npc.EditorID ?? "Unnamed"}. Will assign new template now.");
                         }
                     }
 
