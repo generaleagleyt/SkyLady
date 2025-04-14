@@ -10,9 +10,9 @@
 
 		<Nullable>enable</Nullable>
 
-		<BaseOutputPath>G:\LoreRim\mods\SkyLady\bin\debug</BaseOutputPath>
+		<OutputType>Library</OutputType>
 
-		<OutputType>Exe</OutputType>
+		<SynthesisPatcher>true</SynthesisPatcher>
 
 		<AssemblyName>SkyLady</AssemblyName>
 
