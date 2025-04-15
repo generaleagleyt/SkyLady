@@ -1,0 +1,2 @@
+This file should be inside your SkyLady mod folder. Its only purpose is to tell the patcher where to create configuration files and where facegen files will be copied.
+Do not delete or rename this file.

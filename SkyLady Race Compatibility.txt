@@ -1,0 +1,27 @@
+NordRace: NordRace
+NordRaceVampire: NordRace, NordRaceVampire
+ImperialRace: ImperialRace
+ImperialRaceVampire: ImperialRace, ImperialRaceVampire
+DarkElfRace: DarkElfRace, _00DwemerRace, MASNerevarineRace
+DarkElfRaceVampire: DarkElfRace, DarkElfRaceVampire, _00DwemerRace, MASNerevarineRace
+ArgonianRace: ArgonianRace
+ArgonianRaceVampire: ArgonianRace, ArgonianRaceVampire
+KhajiitRace: KhajiitRace
+KhajiitRaceVampire: KhajiitRace, KhajiitRaceVampire
+HighElfRace: HighElfRace
+HighElfRaceVampire: HighElfRace, HighElfRaceVampire
+WoodElfRace: WoodElfRace
+WoodElfRaceVampire: WoodElfRace, WoodElfRaceVampire
+BretonRace: BretonRace
+BretonRaceVampire: BretonRace, BretonRaceVampire
+RedguardRace: RedguardRace
+RedguardRaceVampire: RedguardRace, RedguardRaceVampire
+OrcRace: OrcRace
+OrcRaceVampire: OrcRace, OrcRaceVampire
+ElderRace: ElderRace
+ElderRaceVampire: ElderRace, ElderRaceVampire
+DremoraRace: DremoraRace
+DA13AfflictedRace: DA13AfflictedRace
+COTRRace: COTRRace, NordRace, ImperialRace
+ArgonianRaceKZ: ArgonianRaceKZ
+KhajiitRaceKZ: KhajittRaceKZ
