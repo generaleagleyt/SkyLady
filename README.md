@@ -1,5 +1,7 @@
 # SkyLady - Ladies of Skyrim
 
+## This README is WIP.
+
 ## Overview
 **SkyLady** is a Synthesis patcher designed to transform all male NPCs in your load order into females, using appearance templates from your modlist. Utilizing the power of the Synthesis framework, SkyLady is lightweight, script-free, and can process a large load order in minutes, making it an efficient tool for feminizing your Skyrim world.
 
