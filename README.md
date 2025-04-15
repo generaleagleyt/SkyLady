@@ -1,122 +1,134 @@
-# SkyLady - A Synthesis Patcher for Skyrim SE, AE, and VR
-
-## Description is WIP - not Final
+# SkyLady - Ladies of Skyrim
 
 ## Overview
-**SkyLady** is a Synthesis patcher for Skyrim SE, AE and VR, that transforms male NPCs into females, using appearance templates from your load order. Utilizing the power of the Synthesis framework, SkyLady is lightweight, script-free, and can process a large load order in minutes, making it an efficient tool for feminizing your Skyrim world.
+**SkyLady** is a Synthesis patcher designed to transform all male NPCs in your load order into females, using appearance templates from your modlist. Utilizing the power of the Synthesis framework, SkyLady is lightweight, script-free, and can process a large load order in minutes, making it an efficient tool for feminizing your Skyrim world.
 
 ## Description
-SkyLady is a Synthesis patcher that transforms male NPCs across your load order into females, using appearance templates from existing female NPCs. It adjusts gender flags, assigns equivalent female voices, and forwards changes from other mods, ensuring seamless integration. While designed to patch entire load orders, SkyLady offers flexible settings like single NPC patching, mod and NPC blacklists, and template preservation for consistent results across runs.
+SkyLady is a Synthesis patcher that transforms male NPCs across your load order into females, using appearance templates from existing female NPCs. It adjusts gender flags, assigns equivalent female voices, and forwards changes from other mods, ensuring seamless integration. While designed to patch entire load orders, SkyLady offers flexible settings like single NPC patching, NPC and mod blacklists, and template preservation for consistent results across runs.
 
 Inspired by SkyFem, an xEdit-based patcher, SkyLady overcomes the 254-master limit with ESP splitting. It processes large load orders (tested with 4000+ plugins) in minutes, making it an efficient tool to feminize your Skyrim world.
 
-ESP splitting is a WIP feature of Synthesis. It will eventually be integrated into Synthesis itself. Currently it works but the patching process will end with an exception. This is intended behaviour and it means the patcher was successful.
+ESP splitting, a work-in-progress Synthesis feature, handles large load orders. If splitting occurs, an intentional error confirms success — your patch is complete. This will be automatic and seamless in future Synthesis updates.
 
 ## Features
-- Transforms male NPCs into females, setting gender flags, applying female voices (configurable) and forwarding other mods' changes. NPCs will use your default body (e.g., 3BA, BHUNP, UBE). Compatible with OBody NG.
-- Single NPC patching lets you manually select NPCs for new appearances. Ideal when you don't like how a certain NPC looks after patching, or for debugging.
-- Blacklist mods (e.g., Skyrim.esm) to exclude from template collection, prioritizing custom appearances.
-- Blacklist mods or specific NPCs to prevent patching, leaving males unchanged.
-- Add mods to "Target Mods" list to patch only selected mods.
+- Transforms male NPCs into females, setting gender flags, applying female voices (configurable) and forwarding other mods' changes. NPCs will use your default body (e.g., 3BA, BHUNP, UBE) and physics. Compatible with OBody NG.
+- Single NPC patching lets you manually select NPCs for new appearances. Ideal when you don't like how a certain NPCs ended up looking, or for debugging.
+- Blacklist mods (e.g., Skyrim.esm) to exclude them from template collection, prioritizing custom appearances.
+- Blacklist mods or specific NPCs to leave males unchanged.
+- Add mods to "Target Mods" list to only patch the selected mods.
 - Preserve previous appearances when adding new mods, patching only new NPCs.
 - Lock specific NPCs to retain their templates across runs for consistent looks.
-- Custom races handled via `SkyLady races.txt` and template sharing through `SkyLady Race Compatibility.txt`.
+- Custom races are handled via `SkyLady races.txt` and template sharing through `SkyLady Race Compatibility.txt`.
 - Handles massive load orders (4000+ plugins) via ESP splitting, bypassing the 254-master limit.
 - Uses `SkyLadyMarker.txt` to locate your SkyLady mod folder for file generation and facegen copying.
-
-## Advanced Features
-- Optional `SkyLadyKeywords.esp` enables multi-ESP mode to track patched NPCs across suffixed plugins (e.g., `SkyLadyPatcher_Main.esp`).
-- Single-ESP mode respects prior multi-ESP patches if `SkyLadyKeywords.esp` is present, skipping patched NPCs.
-- Option to ESL flag split ESP plugins to save load order slots (as right now flagging through Synthesis Profile settings doesn't work on split ESP files.)
+- Option to automatically ESL flag split ESP plugins to save load order slots (as currently flagging through Synthesis Profile settings doesn't work on split ESPs.)
 
 ## Installation
-(This guide is for Mod Organizer 2 users assumes you have Synthesis already installed. Otherwise you can follow this (or any other guide) on Youtube (for MO2): [Synthesis Guide on YT](https://www.youtube.com/watch?v=s7luh0hMMAU). I have never used other mod managers, so I might not be able to help you if you encounter issues during the installation.)
+(This guide is for Mod Organizer 2 users and assumes you have Synthesis already installed. If not, you can follow this (or any other guide) on Youtube (for MO2): [Synthesis Guide on YT](https://www.youtube.com/watch?v=s7luh0hMMAU). 
+I have never used other mod managers, so I might not be able to help you if you encounter issues during the installation.)
 
-1. Create an empty mod folder inside your mods folder. Name it SkyLady or similar. (Optionally, if you later don't want to manually move files from Overwrite into this folder, you can create an empty TXT file called `SkyLadyMarker.txt`, and the patcher will detect it and create all files inside that folder. The final ESP file will still have to be moved manually.)
-2. Download SkyLady.synth file from Nexus (main file, link) and extract it into a temporary folder.
-2.5. (Optional, for advanced users only) For multi-ESP mode, download `SkyLadyKeywords.esp` from Nexus from Optional Files and place it in your SkyLady mod folder. Make sure it's active, load order position doesn’t matter. For normal users, YOU DON'T NEED THIS UNLESS YOU KNOW WHAT YOU ARE DOING.)
-3. Make sure the Synthesis is added as an executable inside MO2 (if not it's part of the Youtube guide above). 
-4. Launch Synthesis through MO2. Once it loads, create a new group called SkyLady Patcher. Locate the `SkyLady.synth` file you extracted earlier and double click on it. It should now open inside Synthesis. Alternatively, you can click on your new group and select "Git Repository" in top left corner, find `SkyLady` and add it to the group this way.
-5. Configure settings to your liking (see **Settings** section below for detailed explanations on what each setting does).
-5. Run the patcher via Synthesis.
+1. Create an empty mod folder inside your MO2 mods folder. Name it SkyLady or similar. Enable it. (Optionally, if you later don't want to manually move files from Overwrite into this folder, create an empty TXT file called `SkyLadyMarker.txt` inside it. The patcher will detect it and move all created files inside the folder. The final ESP file still has to be moved manually.)
+2. Download `SkyLady - Ladies of Skyrim` main file from Nexus (link) and extract it into a temporary folder. Optionally, download the `SkyLady - TXT settings` from Optional files and extract them into the SkyLady mod folder to adjust settings like patched races and voice types immediately (otherwise, defaults are created on first run).
+3. Launch Synthesis through MO2. Once it loads, create a new group called SkyLady Patcher. After that, click on the group, then choose `Local Solution` - `Existing` - click the three dots and locate the SkyLady.sln file you extracted earlier. Wait for the bottom right button to become clickable, then click `Confirm`. 
+4. Click on `User Settings` and configure the settings to your liking (see **Settings** section below for detailed explanations on what each setting does).
+5. Once you are ready, run the patcher.
 6. Once the patcher is done, one of two outcomes will happen:
-6.1. The patcher completes normally. Check the ammount of patched NPCs (e.g. 1000 out of 1000). If the numbers are not the same, I recommend you right click in the Synthesis console, select all, copy and save it inside a TXT file. Check the **Troubleshooting** section below for more details. Close Synthesis.
-6.2. If ESP splits occur (254-master limit), an intentional error indicates success. Check the ammount of patched NPCs (e.g. 1000 out of 1000). If the numbers are not the same, I recommend you right click in the Synthesis console, select all, copy and save it inside a TXT file. Check the **Troubleshooting** section below for more details. Close Synthesis.
-7. MO2 might inform you that load order has been changed and if you want to keep changes. You can pick yes, but it doesn't matter which option you choose. `SkyLadyPatcher.esp` (or multiple if split) should now appear at the bottom of your load order (right side).
-8.1. If you have Synthesis Output folder set, all generated files should end up inside it. If you don't, they should be inside your Overwrite folder. Open the folder and you should see `SkyLady` folder and one or more `SkyLady Patcher.esp` files. Move the ESP file(s) inside the `SkyLady` folder, then open that folder, select all and move them to the SkyLady mod folder you created in step 1. (inside your `mods` folder). 
-8.2. If you created `SkyLadyMarker.txt` during step 1, all files generated by SkyLady should already be present inside the SkyLady mod folder. You only need to move the created ESP file(s) into it.
-8.3. Your SkyLady mod folder should now contain:
+6.1. The patcher completes normally. Check the the console for amount of patched NPCs (e.g. 1000 out of 1000). If the numbers are not the same, I recommend you right click in the Synthesis console, select all, copy and save it inside a TXT file. Check the **Troubleshooting** section below for more details. Close Synthesis.
+6.2. If ESP splits occur (ESP hit 254-master limit), an intentional error will indicate success. Check the amount of patched NPCs (e.g. 1000 out of 1000). If the numbers are not the same, I recommend you right click in the Synthesis console, select all, copy and save it inside a TXT file. Check the **Troubleshooting** section below for more details. Close Synthesis.
+7. MO2 might inform you that load order has been changed and ask if you want to keep changes. You can pick yes, but it doesn't matter. `SkyLadyPatcher.esp` file (or multiple if split) should now appear at the bottom of your load order.
+8.1. If you created `SkyLadyMarker.txt` during step 1 or downloaded the TXT settings from Optional files, then all files generated by SkyLady should already be present inside your SkyLady mod folder. You only need to move the created ESP file(s) into it.
+8.2. If you haven't, check your dedicated Synthesis Output folder, or Overwrite folder. All generated files should now be inside it. Open the appropriate folder and inside you should see `SkyLady` folder and one or more `SkyLady Patcher.esp` files. Move the ESP file(s) and the **content** of the SkyLady folder inside your SkyLady mod folder you created during step 1. Delete the empty SkyLady folder inside Synthesis Output folder/Overwrite.
+8.3. For future runs, all files should be generated inside your SkyLady mod folder, so no need to move anything.
+9. Refresh MO2, make sure both SkyLady mod folder and SkyLady Patcher.esp plugin are active. SkyLady plugins should be placed below other NPC-altering mods/patches in your load order for it's changes to apply.
+10. Enjoy.
+
+After a successful run, your SkyLady mod folder should look like this:
 - meshes
 - textures
+- SkyLadyMarker.txt
 - SkyLady partsToCopy.txt
 - SkyLady races.txt
 - SkyLady Race Compatibility.txt
 - SkyLady Voice Compatibility.txt
 - SkyLadyTempTemplates.json
 - SkyLady Patcher.esp (if split, also SkyLady Patcher_2.esp, etc.)
-9. Refresh MO2. Activate the ESP file(s) on the right side of MO2. SkyLady plugins should be placed below other NPC-altering mods/patches in your load order for it's changes to apply.
 
-## Settings
+## Patcher's Settings
 - **Patch Single NPC Only**:
-Usage: This option allows you to select individual NPCs and assign them random female appearances, without touching other NPCs (whether patched or unpatched). This is useful when you don't like how certain NPCs ended up looking after you patched your entire load order. This setting allows you to select such NPCs and "roll the dice" for them again, assigning them another random look. 
-
-If you already run the patcher prior to doing this, all other NPCs will keep their previously assigned appearance. Or if you wish to only "feminize" hand-selected NPCs, this is the option to do so.
+Usage: This option allows you to select individual NPCs and assign them random female appearances, without touching other NPCs (whether patched or unpatched). This is useful when you don't like how certain NPCs ended up looking after your previous SkyLady run. It allows you to select such NPCs and "roll the dice" again, giving each of them another random look. Or if you wish to "feminize" only hand-selected NPCs, this is the option to use.
 
 Instructions: 
-1. Tick the `Patch Single NPC Only` option, then click on `NPCs to Patch`. A new window will open. Click on the `+` sign on top right. A new entry will be created. Click inside the first box and search for the NPC you want to patch. You need to find the EditorID of the NPC. You can check EditorID of NPCs with xEdit. After you select all NPCs you want to patch, click on the `Top Level` to return back to the main window. You don't need to tick `Preserve Last Run Appearances`, as it's always active if `Patch Single NPC Only` is ticked.
+1. Tick the `Patch Single NPC Only` option, then click on `NPCs to Patch`. A new window will open. Click on the `+` sign on top right. A new entry will be created. Click inside the left field and search for the NPC you want to patch. You need to enter the EditorID of the NPC. You can check EditorIDs of NPCs in xEdit. After you select all NPCs you want to patch, click on the `Top Level` to return back to the main window. You don't need to tick `Preserve Last Run Appearances`, as it's always active if `Patch Single NPC Only` is ticked. You can run the patcher.
 
 - **NPCs to Patch**: Part of `Patch Single NPC Only`. See above.
 
-- **Preserve Last Run Appearances**: Enabling this option will ensure that all previously patched NPCs keep their assigned templates. If you install a new mod and want to patch it's male NPCs, without changing current appearances, enable this option and run the patcher. New NPCs will get patched while the other remain the same. This option is always enabled when using `Patch Single NPC Only`. 
+- **Preserve Last Run Appearances**: This option is always internally enabled when using `Patch Single NPC Only`. Enabling this option will ensure that all previously patched NPCs will keep their last assigned appearance. If you install a new mod and want to patch it with SkyLady, without changing current NPC appearances, enable this option. New NPCs will get patched while the others remain the same. 
 
-- **Use Default Race Fallback**: Use Nord and Imperial templates for custom races. SkyLady works by searching the load order for elligible NPCs based on their race, and assigning them random female templates of the same or compatible race. If an NPC has a race that is not included inside `SkyLady races.txt`, it won't be patched (will stay male). If the race is inside the TXT file, the NPC will be patched with a female template of the same race, or of a compatible race (as set inside `SkyLady Race Compatibility.txt`). IF a race IS inside `SkyLady races.txt`, but it doesn't have a female template nor a compatible race, with this setting checked a random template will be chosen from races NordRace and ImperialRace. Otherwise the NPC would not be patched (remain male).
+- **Use Default Race Fallback**: Use Nord and Imperial templates for custom races. SkyLady works by searching your load order for elligible NPCs based on their race, and assigning them random female templates of the same or compatible race. If an NPC has a race that is not included inside `SkyLady races.txt`, it won't be patched (will stay male). If the race is inside the TXT file, the NPC will be patched with a female template of the same race, or of a compatible race (as set inside `SkyLady Race Compatibility.txt`). IF a race IS inside `SkyLady races.txt`, but it doesn't have a valid female template nor a valid compatible race, this setting will make sure it's patched with a random template from NordRace or ImperialRace races. Otherwise the NPC won't be patched (stays male).
 
-- **NPCs with Locked Templates**: Lock NPCs’ templates for consistency. If you really like how some patched NPCs look, and would like to keep their appearance even if you rerun the patcher in the future, add them to this list. 
+- **NPCs with Locked Templates**: Lock NPCs’ templates for consistency. If you really like how certain patched NPCs look, you can add them to this list to lock their appearance. This means they will keep their last assigned appearance until you unlock them (remove from the list). This setting overrides all blacklists (except the Template Mod Blacklist) and other settings.
 
+- **Template Mod Blacklist**: Exclude mods from template collection. The patcher scans your load order for compatible female templates and randomly assigns them to male NPCs. If you want to prevent certain templates from being used (like vanilla-looking templates from Skyrim.esm), add their mods to this list. I recommend adding Skyrim.esm and all DLCs, as well as CC plugins. If you do it, make sure you have plenty of other mods that contain valid female templates, like NPC replacers, female follower mods etc. Otherwise you might get repeating looks.
 
-- **Template Mod Blacklist**: Exclude mods from template collection.
-- **Target Mods to Patch**: Limit patching to specific mods.
-- **Mods to Exclude from Patching**: Skip mods from patching.
-- **NPCs to Exclude from Patching**: Skip specific NPCs.
-- **Flag Output Plugins as ESL**: Save load order slots for small plugins.
-- **Append Suffix to Output Filenames**: Enable multi-ESP mode (needs `SkyLadyKeywords.esp`).
-- **Output Filename Suffix**: Set custom suffix or timestamp.
+- **Target Mods to Patch**: Limit patching to specific mods. If you don't want to patch your entire load order, but only a handful of mods, add them to this list. Only male NPCs present in listed mods will be patched.
+
+- **Mods to Exclude from Patching**: Skip mods from patching. If you want male NPCs from some mods to stay male, add them here. 
+
+- **NPCs to Exclude from Patching**: Skip specific NPCs. If you want specific NPCs to remain male, add them here. You need to know their EditorID.
+
+- **Flag Output Plugins as ESL**: Automatically flag split ESP plugins as ESL (ESP-FE). Synthesis Profile Setting that does this doesn't work on split ESP plugins yet, so you can use this option instead. Only applies to split ESPs.
 
 ## Understanding Templates
-- **What is a Template?**: A female NPC from your load order used as a source for appearance data (e.g., head parts, tint layers, facegen files, hair color, height, weight).
+- **What is a Template?**: By a "template" we understand a female NPC from your load order used as a source for appearance data (e.g., head parts, tint layers, facegen files, hair color, height, weight). In other words, it's a look of a female NPCs.
 - **How Are Templates Selected?**:
-  - Templates are female NPCs from humanoid races (defined in `SkyLady races.txt`).
-  - They must not be from blacklisted mods and require loose facegen files (except for vanilla plugins like Skyrim.esm, Dawnguard.esm, etc.).
-  - Templates are grouped by race, with selection based on `SkyLady Race Compatibility.txt` or a default map.
-- **Default Configuration**: On first run, SkyLady creates `races.txt` and `Race Compatibility.txt` with defaults, editable for custom setups.
-- **Adding New Templates**: Install mods with female NPCs (e.g., follower mods) to add templates, ensuring they have loose facegen files (unless from vanilla plugins) and aren’t blacklisted.
+  - Valid templates are female NPCs from humanoid races (defined in `SkyLady races.txt`).
+  - They must not be from blacklisted mods (Template Mods Blacklist), and require loose facegen files (except for vanilla plugins like Skyrim.esm, Dawnguard.esm, etc.).
+  - Templates are grouped by race, with selection based on `SkyLady Race Compatibility.txt`.
+- **Adding New Templates**: To expand the template pool, install mods with female NPCs (e.g., follower mods or female replacer mods), ensuring they have loose facegen files and aren’t blacklisted.
 - **Custom Races**:
   - Add the race’s EditorID to `SkyLady races.txt` to recognize it.
-  - Ensure female NPCs of the race exist with loose facegen files (or are from vanilla plugins), or configure `SkyLady Race Compatibility.txt` to use templates from related races.
+  - Ensure female NPCs of the race exist with loose facegen files, or configure `SkyLady Race Compatibility.txt` to use templates from other races.
 
 ## Managing Mods with SkyLady
-- **Adding/Updating Mods**: If new mods introduce male NPCs, rerun SkyLady with "Preserve Last Run Appearances" ticked to keep existing appearances. Blacklist unchanged mods if needed. Ensure `SkyLadyMarker.txt` stays in your mod folder to guide file generation.
-- **Removing Patched Mods**: Disable or delete the mod’s plugin, then rerun SkyLady to update the patch, excluding the removed mods from Target Mods if listed.
-- **Removing SkyLady**: Disable all `SkyLadyPatcher.esp` files and delete the SkyLady mod folder. Avoid uninstalling mid-save, though it’s generally safe due to Synthesis’s design.
+- **Adding/Updating Mods**: If new mods introduce male NPCs, rerun SkyLady with "Preserve Last Run Appearances" checked to keep existing appearances.
+- **Removing Patched Mods**: Disable SkyLady plugin, then rerun SkyLady to update the patch. Check "Preserve Last Run Appearances" to keep existing appearances.
+- **Uninstalling SkyLady**: Disable all `SkyLadyPatcher.esp` files and delete the SkyLady mod folder. Remove the SkyLady patcher from Synthesis.
 
 ## Troubleshooting
-- **NPCs Not Being Patched**:
-  - Check the log for "Unpatched NPCs" to identify reasons (e.g., no templates).
-  - Ensure female templates exist for the NPC’s race.
-  - Verify the NPC’s mod/NPC isn’t excluded.
-  - Confirm custom races are in `SkyLady races.txt`.
-- **Templates Not Being Used**:
-  - Check the log for "Skipped Templates" (e.g., BSA usage, blacklisted mods).
-  - Adjust the Template Mod Blacklist as needed.
-- **CTD or Incorrect Appearance**:
-  - Identify the NPC via crash logs (e.g., NetScriptFramework).
-  - Open `SkyLadyTempTemplates.json` to find the template’s source mod, blacklist it, and rerun in Single NPC mode.
-- **ESP Splitting**:
-  - Split ESPs (e.g., `SkyLadyPatcher_Main.esp`, `SkyLadyPatcher_Main_1.esp`) handle large load orders, limited to 254 masters each.
-- **Files in Overwrite**: If `.txt` files or `SkyLadyTempTemplates.json` appear in MO2’s Overwrite, move them to your SkyLady mod folder with `SkyLadyMarker.txt`.
+
+**Always save the Synthesis log after a run (right-click console, select all, copy, paste into a TXT file) to diagnose issues later.**
+
+- **Some NPCs are not patched**:
+  - Check your saved Synthesis log for "Unpatched NPCs" to identify reasons.
+  - In-game, approach the unpatched NPC, open the console, click it to view its IDs, and note the EditorID (screenshot or write it down).
+  - Save the Synthesis log after each run (right-click console, select all, copy, paste into a TXT file).
+  - Search the log for the NPC’s EditorID to find why it wasn’t patched. Possible reasons:
+    - **Race not listed**: The NPC’s race isn’t in `SkyLady races.txt`.
+      - *Solution*: Use xEdit to find the race's name, add it to `SkyLady races.txt`, and update `SkyLady Race Compatibility.txt` for template races.
+    - **No templates**: No compatible female templates for the NPC’s race.
+      - *Solution*: Add compatible races in `SkyLady Race Compatibility.txt` or install mods with female NPCs of that race.
+    - **Blacklisted**: The NPC or its mod is excluded.
+      - *Solution*: Check the patcher's blacklists.
+    - **Target mods**: If using `Target Mods to Patch`, the NPC’s mod isn’t included.
+      - *Solution*: Add the NPC’s mod to `Target Mods to Patch`.
+
+- **Templates From Some Mods Are Not Being Used**:
+  - Check the Synthesis log for "Skipped Templates".
+  - Templates won't be used if that mods FaceGen files are inside BSA, or if the mod doesn't contain it's own FaceGen files.
+  
+- **Patched NPC Has a Weird Appearance (Purple face, deformed head, floating eyes and mouth**:
+  - Cause: The template used for that NPC is broken. It usually happens with templates from old follower mods. 
+  - Solution: Note the EditorID of the affected NPC. Open Synthesis, check `Patch Single NPC Only` and select the affected NPC in `NPCs to Patch`. Run the patcher. The selected NPC will get new random look.
+  - Prevention: Open your saved Synthesis log, look for the affected NPC's EditorID. You should find a line:
+  *Patched: EditorID (Formkey) using EditorIDofUsedTemplate from PluginName.esp*
+  Note the name of the plugin from which the template was used, and add it to the `Template Mod Blacklist` next time you run the patcher. This will make sure it's templates won't be used in the future.
+  
+- **My Game Crashed and CrashLog Mentions NPC Patched by SkyLady**:
+  - Identify the NPC via crash log. Find it's EditorID, then follow the instruction above. Blacklist the source mod of that template. If it happens again, temporarily disable SkyLady Patcher.esp and check the NPC in game. CTD caused by applied broken templates would happen the moment you enter the same cell as the affected NPC. If you get CTD again, it's not caused by SkyLady. If disabling SkyLady helps, another broken template might have been assigned and you should repeat the process above.
+  - If you use OBody NG, and you notice it being mentioned in your crashlog, try disabling it's `Performance mode` MCM setting. It might sometimes cause crashes if there are many female NPCs in one place.
 
 ## Compatibility
-SkyLady supports Skyrim Special Edition, Anniversary Edition, and VR (test VR for full compatibility) as a Synthesis patcher, ensuring broad mod compatibility.
+SkyLady should work with Skyrim SE, AE, and VR.
 
 Appearance templates from vanilla Skyrim plugins (Skyrim.esm, Dawnguard.esm, etc.) are supported without loose facegen files. Modded templates require loose facegen files. For modded setups, blacklist vanilla mods to prioritize custom templates.
 
@@ -127,18 +139,17 @@ Voice mappings for patched NPCs can be customized via `SkyLady Voice Compatibili
 ## Requirements
 - Skyrim Special Edition, Anniversary Edition, or VR
 - Synthesis (latest version recommended)
-- `SkyLadyKeywords.esp` (optional, for multi-ESP mode only)
 
 ## Credits
-- **SkyFem team**: For inspiring SkyLady with the original xEdit-based mod.
+- Thanks to **Corsec**, for his SkyFem mod ([Loverslab link](https://www.loverslab.com/files/file/3485-skyfem-all-npcs-now-female-or-futanari/)), and to the author of improved Special Edition version ([Loverslab link](https://www.loverslab.com/files/file/7549-skyfem-all-npcs-now-female-special-edition/), from which I took inspiration. 
 - **Mutagen/Synthesis Team**: For the framework enabling SkyLady’s functionality.
 - **Bethesda**: For creating Skyrim and its modding ecosystem.
 
 ## Version History
-- **v1.0.0** (April 2025): Initial release with auto-generated configuration files and support for SE, AE, and VR.
+- **v1.0.0** (April 2025): Initial release.
 
 ## Support
-Report issues on GitHub (`https://github.com/generaleagleyt/SkyLady`) or Nexus (once uploaded).
+Report issues on Nexus or GitHub (`https://github.com/generaleagleyt/SkyLady`).
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
