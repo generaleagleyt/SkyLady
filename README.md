@@ -97,6 +97,13 @@ I have never used other mod managers, so I might not be able to help you if you 
 - SkyLady Patcher.esp (if split, also SkyLady Patcher_2.esp, etc.)
 
 ## Patcher's Settings
+
+**Important Note:** SkyLady, as any other Synthesis Patcher, overwrites its previous output ESP with each run. For example, if you first patch NPCs from Skyrim.esm and later patch only Dawnguard.esm, the Skyrim.esm changes won’t automatically persist. To maintain previous appearances, SkyLady saves patched NPCs and their templates inside `SkyLadyTempTemplates.json`. Use the **Preserve Last Run Appearances** and **NPCs with Locked Templates** settings explained below to reapply the stored templates in your next run. Check each setting’s description to control which NPCs keep their prior looks versus receiving new ones. If unsure, ask in the Nexus Posts (link) section.
+
+**WARNING:** The `SkyLadyTempTemplates.json` file only keeps track of your last session. Any previous sessions are lost. (You could potentially keep your previous sessions by saving the `SkyLadyTempTemplate.json` file somewhere outside your SkyLady mod folder.)
+
+By default, SkyLady will patch ALL mods in your load order. If that's not what you want, use one or more settings explained bellow.
+
 - **Patch Single NPC Only**:
 Usage: This option allows you to select individual NPCs and assign them random female appearances, without touching other NPCs (whether patched or unpatched). This is useful when you don't like how certain NPCs ended up looking after your last SkyLady run. It allows you to select such NPCs and "roll the dice" again, giving them another random look. Or if you wish to "feminize" only hand-selected NPCs, this is the option to use.
 
