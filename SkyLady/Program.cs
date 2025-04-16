@@ -105,7 +105,7 @@ namespace SkyLady.SkyLady
             nickname: "Settings",
             path: "settings.json",
             out Settings)
-            .SetTypicalOpen(GameRelease.SkyrimSE, "SkyLady.esp")
+            .SetTypicalOpen(GameRelease.SkyrimSE, "SkyLadyPatcher.esp")
             .Run(args);
         }
 
@@ -1267,8 +1267,8 @@ namespace SkyLady.SkyLady
                     var originalFileName = mod.ModKey.FileName.ToString();
 
                     string outputFileName = i == 0
-                    ? "SkyLady Patcher.esp"
-                    : $"SkyLady Patcher_{i + 1}.esp";
+                    ? state.PatchMod.ModKey.FileName.ToString()
+                    : $"{state.PatchMod.ModKey.FileName.ToString().Replace(".esp", "")}_{i + 1}.esp";
                     Console.WriteLine($"Using Synthesis naming: {outputFileName}");
 
                     var splitMasterCount = mod.MasterReferences.Count;
