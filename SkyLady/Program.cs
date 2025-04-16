@@ -1273,7 +1273,7 @@ namespace SkyLady.SkyLady
 
                     var splitMasterCount = mod.MasterReferences.Count;
                     var recordCount = mod.EnumerateMajorRecords().Count();
-                    Console.WriteLine($"Mod {i}: {outputFileName}, Masters: {splitMasterCount}, Records: {recordCount}");
+                    Console.WriteLine($"Mod {i}: {outputFileName}, Records: {recordCount}");
 
                     mod.WriteToBinary(
                     Path.Combine(state.DataFolderPath, outputFileName),
