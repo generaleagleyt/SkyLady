@@ -1,3 +1,17 @@
+# SkyLady Race Compatibility Configuration
+# Back up this file before editing.
+# Defines which races can share female templates.
+# Format: 
+# Race: CompatibleRace1, CompatibleRace2, ...
+# Controls template matching for patched NPCs; broader mappings increases variety.
+# Add mod races or adjust mappings to suit your needs.
+#
+# Example:
+# NordRace: NordRace, ImperialRace
+# This means that NPCs of NordRace can receive templates from both NordRace and ImperialRace template pools.
+# 
+# Lines starting with # or empty lines are ignored.
+
 NordRace: NordRace
 NordRaceVampire: NordRace, NordRaceVampire
 ImperialRace: ImperialRace

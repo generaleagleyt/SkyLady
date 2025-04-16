@@ -1,8 +1,10 @@
 # SkyLady Voice Compatibility Configuration
-# Format:
-# [VoiceMap] for male-to-female voice mappings. If an NPC used a male voice on the left side before using SkyLady, it will end up with the female voice on the right side.
-# [RaceVoiceFallbacks] for race-specific fallback voices. If an NPC of the race on the left side contains a voice not mapped in [VoiceMap] section, it will randomly choose one of the race's voices on the right side.
-# These settings are especially useful for CHIM users.
+# Back up this file before making changes.
+# [VoiceMap]
+# For male-to-female voice mappings. If an NPC used a male voice on the left side before running the patcher, it will end up with the female voice on the right side.
+# You can add more than one voice to the right side, in which case a random one will be chosen.
+# [RaceVoiceFallbacks]
+# For race-specific fallback voices. If an NPC of the race on the left side contains a custom voice not mapped in [VoiceMap] section, it will randomly receive one of the voices on the right side. Unless you manually add it to the [VoiceMap] section.
 # Lines starting with # or empty lines are ignored.
 
 [VoiceMap]
@@ -37,23 +39,23 @@ DLC2MaleDarkElfCommoner: DLC2FemaleDarkElfCommoner
 DLC2MaleDarkElfCynical: FemaleDarkElf
 
 [RaceVoiceFallbacks]
-NordRace: FemaleNord, FemaleEvenToned, FemaleCommander
-NordRaceVampire: FemaleNord, FemaleEvenToned, FemaleCommander
+NordRace: FemaleNord, FemaleEvenToned, FemaleCommander, FemaleYoungEager, FemaleSultry
+NordRaceVampire: FemaleNord, FemaleEvenToned, FemaleCommander, FemaleYoungEager, FemaleSultry
 DarkElfRace: FemaleDarkElf, DLC2FemaleDarkElfCommoner, FemaleCondescending
-DarkElfRaceVampire: FemaleDarkElf, DLC2FemaleDarkElfCommoner, FemaleCondescending
-ArgonianRace: FemaleArgonian, FemaleSultry
-ArgonianRaceVampire: FemaleArgonian, FemaleSultry
-KhajiitRace: FemaleKhajiit, FemaleSultry
-KhajiitRaceVampire: FemaleKhajiit, FemaleSultry
-HighElfRace: FemaleElfHaughty, FemaleEvenToned
-HighElfRaceVampire: FemaleElfHaughty, FemaleEvenToned
-WoodElfRace: FemaleEvenToned, FemaleYoungEager
-WoodElfRaceVampire: FemaleEvenToned, FemaleYoungEager
-BretonRace: FemaleEvenToned, FemaleYoungEager
-BretonRaceVampire: FemaleEvenToned, FemaleYoungEager
-ImperialRace: FemaleEvenToned, FemaleCommander
-ImperialRaceVampire: FemaleEvenToned, FemaleCommander
-RedguardRace: FemaleEvenToned, FemaleSultry
-RedguardRaceVampire: FemaleEvenToned, FemaleSultry
-OrcRace: FemaleOrc, FemaleCommander
-OrcRaceVampire: FemaleOrc, FemaleCommander
+DarkElfRaceVampire: FemaleDarkElf, DLC2FemaleDarkElfCommoner
+ArgonianRace: FemaleArgonian
+ArgonianRaceVampire: FemaleArgonian
+KhajiitRace: FemaleKhajiit
+KhajiitRaceVampire: FemaleKhajiit
+HighElfRace: FemaleElfHaughty, FemaleEvenToned, FemaleYoungEager, FemaleSultry
+HighElfRaceVampire: FemaleElfHaughty, FemaleEvenToned, FemaleYoungEager, FemaleSultry
+WoodElfRace: FemaleEvenToned, FemaleYoungEager, FemaleSultry
+WoodElfRaceVampire: FemaleEvenToned, FemaleYoungEager, FemaleSultry
+BretonRace: FemaleEvenToned, FemaleYoungEager, FemaleSultry
+BretonRaceVampire: FemaleEvenToned, FemaleYoungEager, FemaleSultry
+ImperialRace: FemaleEvenToned, FemaleCommander, FemaleYoungEager, FemaleSultry
+ImperialRaceVampire: FemaleEvenToned, FemaleCommander, FemaleYoungEager, FemaleSultry
+RedguardRace: FemaleEvenToned, FemaleSultry, FemaleYoungEager
+RedguardRaceVampire: FemaleEvenToned, FemaleSultry, FemaleYoungEager
+OrcRace: FemaleOrc
+OrcRaceVampire: FemaleOrc

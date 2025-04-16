@@ -1,3 +1,11 @@
+# SkyLady Parts to Copy Configuration
+# Adjusting these is not recommended, as it may cause unintended behavior. Only proceed if you know what you are doing.
+# Back up this file if you decide to edit it.
+# Lists NPC appearance components to copy from female templates (e.g., PNAM, Tint Layers).
+# Format: One component identifier per line.
+# These settings control which visual aspects are applied to patched NPCs.
+# Lines starting with # or empty lines are ignored.
+
 PNAM
 HEDP
 WNAM

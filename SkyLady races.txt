@@ -1,3 +1,11 @@
+# SkyLady Races Configuration
+# Back up this file before editing.
+# Lists the races eligible for patching by SkyLady.
+# Format: One race EditorID per line.
+# These races determine which NPCs can be transformed with female templates.
+# Add custom races from mods to include them, or remove races to exclude. Excluded races won't be patched.
+# Lines starting with # or empty lines are ignored.
+
 ArgonianRace
 BretonRace
 DarkElfRace
