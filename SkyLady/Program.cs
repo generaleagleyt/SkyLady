@@ -1156,7 +1156,7 @@ namespace SkyLady.SkyLady
             }
 
             // Add a small delay to ensure file handles are released before Synthesis writes the output
-            Thread.Sleep(5000);
+            Thread.Sleep(2000);
 
             // Check if splitting is needed based on the number of masters
             var contributingMods = new HashSet<ModKey>();
