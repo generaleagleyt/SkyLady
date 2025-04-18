@@ -16,8 +16,8 @@ NordRace: NordRace
 NordRaceVampire: NordRace, NordRaceVampire
 ImperialRace: ImperialRace
 ImperialRaceVampire: ImperialRace, ImperialRaceVampire
-DarkElfRace: DarkElfRace, _00DwemerRace, MASNerevarineRace
-DarkElfRaceVampire: DarkElfRace, DarkElfRaceVampire, _00DwemerRace, MASNerevarineRace
+DarkElfRace: DarkElfRace
+DarkElfRaceVampire: DarkElfRace, DarkElfRaceVampire
 ArgonianRace: ArgonianRace
 ArgonianRaceVampire: ArgonianRace, ArgonianRaceVampire
 KhajiitRace: KhajiitRace
@@ -38,4 +38,4 @@ DremoraRace: DremoraRace
 DA13AfflictedRace: DA13AfflictedRace
 COTRRace: COTRRace, NordRace, ImperialRace
 ArgonianRaceKZ: ArgonianRaceKZ
-KhajiitRaceKZ: KhajittRaceKZ
+KhajiitRaceKZ: KhajiitRaceKZ
