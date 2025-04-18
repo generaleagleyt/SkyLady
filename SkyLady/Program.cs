@@ -10,6 +10,7 @@ using Mutagen.Bethesda.Synthesis.Settings;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Mutagen.Bethesda.Archives;
 
 namespace SkyLady.SkyLady
 {
@@ -75,7 +76,7 @@ namespace SkyLady.SkyLady
         public List<LockedNpcTemplate> LockedTemplates { get; set; } = [];
 
         [SynthesisSettingName("Template Mod Blacklist")]
-        [SynthesisTooltip("Mods to exclude from template collection (e.g., Skyrim.esm for modded setups to avoid vanilla looks). Vanilla mods like Skyrim.esm are included by default.")]
+        [SynthesisTooltip("Mods to exclude from template collection (e.g., Skyrim.esm for modded setups to avoid vanilla looks). Vanilla mods require loose facegen files.")]
         public HashSet<ModKey> TemplateModBlacklist { get; set; } = [];
 
         [SynthesisSettingName("Target Mods to Patch")]
@@ -228,11 +229,11 @@ namespace SkyLady.SkyLady
                     File.WriteAllLines(racesPath,
                     [
                     "# SkyLady Races Configuration",
+                "# Back up this file before making changes.",
                 "# Lists the races eligible for patching by SkyLady (e.g., NordRace, ArgonianRace).",
                 "# Format: One race EditorID per line.",
                 "# These races determine which NPCs can be transformed with female templates.",
-                "# Add custom races from mods to include them, or remove races to exclude.",
-                "# Back up this file before editing.",
+                "# Add custom races from mods to include them, or remove races to exclude. Excluded races won't be patched",
                 "# Lines starting with # or empty lines are ignored.",
                 "",
                 "ArgonianRace",
@@ -278,11 +279,11 @@ namespace SkyLady.SkyLady
                     File.WriteAllLines(partsToCopyPath,
                     [
                     "# SkyLady Parts to Copy Configuration",
+                "# Adjusting this file is not recommended, as it may cause unintended behavior. Only proceed if you know what you are doing.",
+                "# Back up this file before making changes.",
                 "# Lists NPC appearance components to copy from female templates (e.g., PNAM, Tint Layers).",
                 "# Format: One component identifier per line.",
                 "# These settings control which visual aspects are applied to patched NPCs.",
-                "# Adjusting these is not recommended, as it may cause unintended behavior.",
-                "# Back up this file before editing.",
                 "# Lines starting with # or empty lines are ignored.",
                 "",
                 "PNAM",
@@ -312,19 +313,25 @@ namespace SkyLady.SkyLady
                     File.WriteAllLines(raceCompatibilityPath,
                     [
                     "# SkyLady Race Compatibility Configuration",
-                "# Defines which races can share female templates (e.g., NordRace: NordRace, ImperialRace).",
-                "# Format: Race: CompatibleRace1, CompatibleRace2, ...",
+                "# Back up this file before making changes.",
+                "# Defines which races can share female templates.",
+                "# Format:",
+                "# Race: CompatibleRace1, CompatibleRace2 ...",
                 "# Controls template matching for patched NPCs; broader mappings increase variety.",
-                "# Add mod races or adjust mappings to suit your load order.",
-                "# Back up this file before editing.",
+                "# Add mod races or adjust mappings to suit your needs.",
+                "#",
+                "# Example:",
+                "# NordRace: NordRace, Imperial Race",
+                "# This means that male NPCs of NordRace can receive templates from both NordRace and ImperialRace template pools.",
+                "# ",
                 "# Lines starting with # or empty lines are ignored.",
                 "",
                 "NordRace: NordRace",
                 "NordRaceVampire: NordRace, NordRaceVampire",
                 "ImperialRace: ImperialRace",
                 "ImperialRaceVampire: ImperialRace, ImperialRaceVampire",
-                "DarkElfRace: DarkElfRace, _00DwemerRace, MASNerevarineRace",
-                "DarkElfRaceVampire: DarkElfRace, DarkElfRaceVampire, _00DwemerRace, MASNerevarineRace",
+                "DarkElfRace: DarkElfRace",
+                "DarkElfRaceVampire: DarkElfRace, DarkElfRaceVampire",
                 "ArgonianRace: ArgonianRace",
                 "ArgonianRaceVampire: ArgonianRace, ArgonianRaceVampire",
                 "KhajiitRace: KhajiitRace",
@@ -345,7 +352,7 @@ namespace SkyLady.SkyLady
                 "DA13AfflictedRace: DA13AfflictedRace",
                 "COTRRace: COTRRace, NordRace, ImperialRace",
                 "ArgonianRaceKZ: ArgonianRaceKZ",
-                "KhajiitRaceKZ: KhajittRaceKZ"
+                "KhajiitRaceKZ: KhajiitRaceKZ"
                     ]);
                     Console.WriteLine($"Created default SkyLady Race Compatibility.txt at {raceCompatibilityPath}.");
                 }
@@ -362,10 +369,17 @@ namespace SkyLady.SkyLady
                     File.WriteAllLines(voiceCompatibilityPath,
                     [
                     "# SkyLady Voice Compatibility Configuration",
-                "# Format:",
-                "# [VoiceMap] for male-to-female voice mappings. If an NPC used a male voice on the left side before using SkyLady, it will end up with the female voice on the right side.",
-                "# [RaceVoiceFallbacks] for race-specific fallback voices. If an NPC of the race on the left side contains a voice not mapped in [VoiceMap] section, it will randomly choose one of the race's voices on the right side.",
-                "# Back up this file before editing.",
+                "# Back up this file before making changes.",
+                "# ",
+                "# [VoiceMap]",
+                "# For male-to-female voice mappings. If an NPC used a male voice on the left side before running the patcher, it will end up with one of the female voices on the right side.",
+                "# You can add more than one voice to the right side, in which case a random one will be chosen.",
+                "# Example:",
+                "# MaleBandit: FemaleCommoner, FemaleSultry",
+                "# ",
+                "# [RaceVoiceFallbacks]",
+                "# For race-specific fallback voices. If a male NPC of the race on the left side contains a custom voice that is not mapped in [VoiceMap] section, it will randomly receive one of the voices on the right side. You can add custom voices to the [VoiceMap] section to assign them specific opposites.",
+                "# ",
                 "# Lines starting with # or empty lines are ignored.",
                 "",
                 "[VoiceMap]",
@@ -400,26 +414,26 @@ namespace SkyLady.SkyLady
                 "DLC2MaleDarkElfCynical: FemaleDarkElf",
                 "",
                 "[RaceVoiceFallbacks]",
-                "NordRace: FemaleNord, FemaleEvenToned, FemaleCommander",
-                "NordRaceVampire: FemaleNord, FemaleEvenToned, FemaleCommander",
+                "NordRace: FemaleNord, FemaleEvenToned, FemaleCommander, FemaleYoungEager, FemaleSultry",
+                "NordRaceVampire: FemaleNord, FemaleEvenToned, FemaleCommander, FemaleYoungEager, FemaleSultry",
                 "DarkElfRace: FemaleDarkElf, DLC2FemaleDarkElfCommoner, FemaleCondescending",
                 "DarkElfRaceVampire: FemaleDarkElf, DLC2FemaleDarkElfCommoner, FemaleCondescending",
-                "ArgonianRace: FemaleArgonian, FemaleSultry",
-                "ArgonianRaceVampire: FemaleArgonian, FemaleSultry",
-                "KhajiitRace: FemaleKhajiit, FemaleSultry",
-                "KhajiitRaceVampire: FemaleKhajiit, FemaleSultry",
-                "HighElfRace: FemaleElfHaughty, FemaleEvenToned",
-                "HighElfRaceVampire: FemaleElfHaughty, FemaleEvenToned",
-                "WoodElfRace: FemaleEvenToned, FemaleYoungEager",
-                "WoodElfRaceVampire: FemaleEvenToned, FemaleYoungEager",
-                "BretonRace: FemaleEvenToned, FemaleYoungEager",
-                "BretonRaceVampire: FemaleEvenToned, FemaleYoungEager",
-                "ImperialRace: FemaleEvenToned, FemaleCommander",
-                "ImperialRaceVampire: FemaleEvenToned, FemaleCommander",
-                "RedguardRace: FemaleEvenToned, FemaleSultry",
-                "RedguardRaceVampire: FemaleEvenToned, FemaleSultry",
-                "OrcRace: FemaleOrc, FemaleCommander",
-                "OrcRaceVampire: FemaleOrc, FemaleCommander"
+                "ArgonianRace: FemaleArgonian",
+                "ArgonianRaceVampire: FemaleArgonian",
+                "KhajiitRace: FemaleKhajiit",
+                "KhajiitRaceVampire: FemaleKhajiit",
+                "HighElfRace: FemaleElfHaughty, FemaleEvenToned, FemaleYoungEager, FemaleSultry",
+                "HighElfRaceVampire: FemaleElfHaughty, FemaleEvenToned, FemaleYoungEager, FemaleSultry",
+                "WoodElfRace: FemaleEvenToned, FemaleYoungEager, FemaleSultry",
+                "WoodElfRaceVampire: FemaleEvenToned, FemaleYoungEager, FemaleSultry",
+                "BretonRace: FemaleEvenToned, FemaleYoungEager, FemaleSultry",
+                "BretonRaceVampire: FemaleEvenToned, FemaleYoungEager, FemaleSultry",
+                "ImperialRace: FemaleEvenToned, FemaleCommander, FemaleYoungEager, FemaleSultry",
+                "ImperialRaceVampire: FemaleEvenToned, FemaleCommander, FemaleYoungEager, FemaleSultry",
+                "RedguardRace: FemaleEvenToned, FemaleSultry, FemaleYoungEager",
+                "RedguardRaceVampire: FemaleEvenToned, FemaleSultry, FemaleYoungEager",
+                "OrcRace: FemaleOrc",
+                "OrcRaceVampire: FemaleOrc"
                     ]);
                     Console.WriteLine($"Created default SkyLady Voice Compatibility.txt at {voiceCompatibilityPath}.");
                 }
@@ -711,18 +725,17 @@ namespace SkyLady.SkyLady
                 {
                     if (npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female))
                     {
-                        bool isVanillaPlugin = npc.FormKey.ModKey.FileName.Equals("Skyrim.esm") ||
-                            npc.FormKey.ModKey.FileName.Equals("Dawnguard.esm") ||
-                            npc.FormKey.ModKey.FileName.Equals("Dragonborn.esm") ||
-                            npc.FormKey.ModKey.FileName.Equals("Update.esm") ||
-                            npc.FormKey.ModKey.FileName.Equals("HearthFires.esm");
                         bool notBlacklisted = !blacklistedMods.Contains(npc.FormKey.ModKey.FileName);
                         var (nifExists, ddsExists) = facegenCache[(npc.FormKey.ModKey.FileName.ToString(), npc.FormKey.IDString())];
-                        bool condition = notBlacklisted && (isVanillaPlugin || (nifExists && ddsExists));
-                        if (condition)
+                        if (notBlacklisted && nifExists && ddsExists)
                         {
                             femaleTemplatesByRace[race] = femaleTemplatesByRace.GetValueOrDefault(race, []);
                             femaleTemplatesByRace[race].Add(npc);
+                        }
+                        else
+                        {
+                            string reason = notBlacklisted ? "Missing loose facegen files" : "Blacklisted mod";
+                            skippedTemplates[npc.FormKey.ToString()] = (npc.FormKey.ModKey.FileName.ToString(), reason);
                         }
                     }
                     else if (patchEntireLoadOrder || requiemKeys.Contains(npc.FormKey.ModKey))
@@ -906,18 +919,10 @@ namespace SkyLady.SkyLady
                             var templateFid = template.FormKey.IDString();
                             var templateFileName = template.FormKey.ModKey.FileName.ToString();
                             var templateRace = template.Race.TryResolve(state.LinkCache)?.EditorID;
-                            var bsaPath = Path.Combine(state.DataFolderPath, templateFileName.Replace(".esm", ".bsa").Replace(".esp", ".bsa"));
 
-                            // Allow vanilla plugins to bypass facegen/BSA check
-                            bool isVanillaPlugin = templateFileName.Equals("Skyrim.esm") ||
-                                templateFileName.Equals("Dawnguard.esm") ||
-                                templateFileName.Equals("Dragonborn.esm") ||
-                                templateFileName.Equals("Update.esm") ||
-                                templateFileName.Equals("HearthFires.esm");
-
-                            if (!isVanillaPlugin && (File.Exists(bsaPath) || blacklistedMods.Contains(templateFileName)))
+                            if (blacklistedMods.Contains(templateFileName))
                             {
-                                Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({template.FormKey}) from {templateFileName} (BSA or blacklisted)");
+                                Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({template.FormKey}) from {templateFileName} (blacklisted)");
                                 continue;
                             }
 
@@ -1034,23 +1039,7 @@ namespace SkyLady.SkyLady
                         bool nifExists = facegenCache[(templateFileName, templateFid)].NifExists;
                         bool ddsExists = facegenCache[(templateFileName, templateFid)].DdsExists;
 
-                        // Allow vanilla plugins to bypass facegen copying
-                        bool isVanillaPlugin = templateFileName.Equals("Skyrim.esm") ||
-                            templateFileName.Equals("Dawnguard.esm") ||
-                            templateFileName.Equals("Dragonborn.esm") ||
-                            templateFileName.Equals("Update.esm") ||
-                            templateFileName.Equals("HearthFires.esm");
-
-                        if (isVanillaPlugin)
-                        {
-                            var nifDir = Path.GetDirectoryName(patchedNif) ?? throw new InvalidOperationException("NIF path directory is null");
-                            var ddsDir = Path.GetDirectoryName(patchedDds) ?? throw new InvalidOperationException("DDS path directory is null");
-                            Directory.CreateDirectory(nifDir);
-                            Directory.CreateDirectory(ddsDir);
-                            facegenCopied = true;
-                            Console.WriteLine($"Assumed vanilla facegen for template {template.EditorID ?? "Unnamed"} ({templateFid}) from {templateFileName}");
-                        }
-                        else if (nifExists && ddsExists)
+                        if (nifExists && ddsExists)
                         {
                             fileCopyOperations.Add((templateNif, patchedNif));
                             fileCopyOperations.Add((templateDds, patchedDds));
@@ -1058,7 +1047,7 @@ namespace SkyLady.SkyLady
                         }
                         else
                         {
-                            Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({template.FormKey}) from {templateFileName} — missing facegen files (.nif: {nifExists}, .dds: {ddsExists})");
+                            Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({template.FormKey}) from {templateFileName} — missing loose facegen files (.nif: {nifExists}, .dds: {ddsExists})");
                             continue;
                         }
                     }
@@ -1364,7 +1353,7 @@ namespace SkyLady.SkyLady
                             new BinaryWriteParameters { ModKey = ModKeyOption.NoCheck });
                     }
                     Console.WriteLine("Data Folder Path: " + state.DataFolderPath);
-                    throw new Exception("This error indicates that the patcher ran successfully. The final ESP was split due to Force ESP Splitting or master count. This error is intentional to prevent Synthesis from crashing and will be removed once ESP splitting is officially implemented in the Synthesis application.");
+                    throw new Exception("This error indicates that the patcher ran successfully. The final ESP was split due to the 254-master limit. This error is intentional to prevent Synthesis from crashing and will be removed once ESP splitting is officially implemented in the Synthesis application.");
                 }
             }
         }
