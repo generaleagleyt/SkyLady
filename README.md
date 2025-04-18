@@ -23,7 +23,6 @@ Inspired by SkyFem, an xEdit-based patcher, SkyLady overcomes the 254-master lim
 - Lock specific NPCs to retain their templates across runs for consistent looks.
 - Custom races are handled via `SkyLady races.txt` and template sharing through `SkyLady Race Compatibility.txt`.
 - Handles massive load orders (4000+ plugins) via ESP splitting, bypassing the 254-master limit.
-- Uses optional `SkyLadyMarker.txt` to locate your SkyLady mod folder for file generation and facegen copying.
 - Option to automatically ESL flag split ESP plugins to save load order slots (as currently flagging through Synthesis Profile settings doesn't work on split ESP files.)
 
 ## Installation
@@ -31,40 +30,51 @@ This guide is for Mod Organizer 2 users and assumes you have Synthesis already i
 
 I have never used other mod managers, so I might not be able to help you if you encounter any issues during installation.
 
-1. Create an empty mod folder inside MO2. Name it SkyLady, then enable it. (Optionally, if you don't want to manually move files from Overwrite into this folder later, you can create an empty TXT file inside it called `SkyLadyMarker.txt`. If you do, refresh MO2. The patcher will detect it and move all created files inside this folder automatically. The final ESP file will still need to be moved manually.)
+1. Create an empty mod folder inside MO2. Name it SkyLady, then enable it. Inside this folder, create an empty TXT file called `SkyLadyMarker.txt`. Refresh MO2. The patcher will detect it and move all created files inside this folder automatically. The final ESP file will still need to be moved manually.
 
-2. Download `SkyLady - Ladies of Skyrim` main file [Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/147559?tab=files) and extract the `SkyLady.synth` file into a temporary folder. Optionally, download the `SkyLady - TXT settings` file from Optional files and extract it into your SkyLady mod folder. They will allow you to adjust settings like patched races and voice types immediately (otherwise, they are created by patcher during the first run).
+2. Download `SkyLady - Ladies of Skyrim` main file [Nexus](https://www.nexusmods.com/skyrimspecialedition/mods/147559?tab=files) and extract the `SkyLady.synth` file into a temporary folder. Optionally, download the `SkyLady - TXT Settings` file from Optional files and extract it into your SkyLady mod folder. They will allow you to adjust settings like patched races and voice types immediately (otherwise, they are created by patcher during the first run).
 
-3. Launch Synthesis through MO2. Once it loads, create a new group called `SkyLady` or similar. Find the `SkyLady.synth` file you extracted earlier and double click it to add it to the group. Alternatively, you can get the patcher from Synthesis. Click on the SkyLady group, choose `Git Repository` and search for `SkyLady`. If it doesn't show up, click on Input tab and enter the following link: `https://github.com/generaleagleyt/SkyLady`. Click on the `Project` dropdown and select the option shown. Click `Confirm` in bottom right.
+3. Launch Synthesis through MO2. Once it loads, create a new group called `SkyLady` or similar. Find the `SkyLady.synth` file you extracted earlier and double click it to add it to the group.
+
+Alternatively, you can get the patcher from Synthesis. Click on the SkyLady group, choose `Git Repository` and search for `SkyLady`. If it doesn't show up, click on Input tab and enter the following link: `https://github.com/generaleagleyt/SkyLady`. Click on the `Project` dropdown and select the option shown. Click `Confirm` in bottom right.
 
 4. Make sure the `Versioning` page looks like this:
-   ![SkyLady_Installation_Setting up the Patcher_Versioning](https://github.com/user-attachments/assets/ca5842a4-6205-41b4-b865-d99e59fa50bc)
+![SkyLady_Installation_Setting up the Patcher_Versioning](https://github.com/user-attachments/assets/ca5842a4-6205-41b4-b865-d99e59fa50bc)
 
-5. Click on `Settings` tab and configure the settings to your liking (see `Patcher Settings` section below for detailed explanations on what each setting does).
+5. Click on `Settings` tab. Paste the path to your SkyLady mod folder (where `SkyLadyMarker.txt` is located) inside the `SkyLady Mod Folder` field, as shown on the picture below.
+![WKG79Hc](https://github.com/user-attachments/assets/5b195dc7-9c89-4b3b-8e6a-747e61d9111a)
 
-6. Run the patcher.
+6. Configure the rest of the settings to your liking (see `Patcher Settings` section below for detailed explanations on what each setting does).
 
-7. Once the patcher is done, one of two outcomes will occur:
+7. Run the patcher.
 
-   a) The patcher completes normally.
+8. Once the patcher is done, one of two outcomes will occur:
+
+   a) The patcher completes normally. Continue to **Step 9.** 
    
-   b) If ESP splits occur (ESP hit 254-master limit), an intentional error will indicate success:
-   ![SkyLady_Installation_Succesfully Split ESP Files](https://github.com/user-attachments/assets/801402c4-a0fd-407d-94da-6bc51f6fd0c2)
-The "System.Exception" is intentional because the splitting is not fully integrated into Synthesis yet. It works, but without it Synthesis would still try to create a single output ESP, hitting the master limit and throwing an exception, after the split ESP files were already created successfully. The above Exception is safe and indicates success.
+   b) You get a Synthesis error "Too Many Masters". This happens when the patcher hits Skyrim's 254-master limit. If thats the case, click on the arrow in the top left to go back to the settings tab, and enable `Force ESP Splitting`. This will make sure the final ESP is split into multiple files, overcoming the master limit. `Run the patcher again.`
+
+*(This ESP splitting was automatic in the previous version, but turns out it's master count detection was not reliable. Synthesis will soon integrate ESP splitting into it's application, making it fully automatic. Until then, use the "Force ESP Splitting" setting to resolve the 254-master issue.)*
+![0wiJl4a](https://github.com/user-attachments/assets/74955131-4518-4459-bd1d-d3048a1f6d71)
+
+After that, you should get an error that reads: "This error indicates that the patcher run successfully. The final ESP was split..."
+![SkyLady_Installation_Succesfully Split ESP Files](https://github.com/user-attachments/assets/801402c4-a0fd-407d-94da-6bc51f6fd0c2)
+
+The error means that the patcher was successful. Continue to **Step 9.** 
+
+*(Explanation: The "System.Exception" is intentional because the splitting is not fully integrated into Synthesis yet. It works, but without it Synthesis would still try to create a single output ESP, hitting the master limit and throwing an exception, after the split ESP files were already created successfully. The above Exception is safe and indicates success.*
    
-8. Check the console for the amount of patched NPCs (e.g. 1000 out of 1000). If the numbers are not the same, I recommend you right click in the console, select all, copy and save it inside a TXT file. Check the **Troubleshooting** section below for more details. Close Synthesis.
+9. Check the console for the amount of patched NPCs (e.g. 1000 out of 1000). If the numbers are not the same, I recommend you right click in the console, select all, copy and save it inside a TXT file. Check the **Troubleshooting** section below for more details. Close Synthesis.
    
-9. MO2 might inform you that load order has been changed and ask if you want to keep changes. You can pick yes or no, it doesn't matter. `SkyLady.esp` file (or multiple if split) should now appear at the bottom of your load order. If not, refresh MO2.
+10. MO2 might inform you that load order has been changed and ask if you want to keep changes. You can pick yes or no, it doesn't matter. `SkyLady.esp` file (or multiple if split) should now appear at the bottom of your load order. If not, refresh MO2.
 
-10. If you created `SkyLadyMarker.txt` during step 1 or downloaded the `SkyLady - TXT settings` from Optional files, then all files generated by SkyLady should already be present inside your SkyLady mod folder. You only need to move the created ESP file(s) into it.
+11. All files generated by SkyLady should now be present inside your SkyLady mod folder. You only need to move the created ESP file(s) into it. Check your dedicated Synthesis Output folder, or Overwrite folder. Move the `SkyLady.esp` file(s) inside your SkyLady mod folder that you created during step 1.
 
-Otherwise, check your dedicated Synthesis Output folder, or Overwrite folder. All generated files should be here. Open the appropriate folder and inside you should see `SkyLady` folder and one or more `SkyLady.esp` files. Move the ESP file(s) and the content of the SkyLady folder inside your SkyLady mod folder you created during step 1. Delete the empty SkyLady folder inside Synthesis Output folder/Overwrite.
+*Note: For future runs, all files should be generated directly inside your SkyLady mod folder, so you don't have to move anything.*
 
-Note: For future runs, all files should be generated directly inside your SkyLady mod folder.
+12. Refresh MO2, make sure both SkyLady mod folder and all SkyLady.esp plugins are active. They should be placed below other NPC-altering mods/patches in both the left side and right side of MO2, for it's changes to apply correctly.
 
-11. Refresh MO2, make sure both SkyLady mod folder and all SkyLady.esp plugins are active. They should be placed below other NPC-altering mods/patches in both the left side and right side of MO2, for it's changes to apply correctly.
-
-12. You are good to go. If you encounter any issues in game, check the **Troubleshooting** section below.
+13. You are good to go. If you encounter any issues in game, check the **Troubleshooting** section below.
 
 <ins>After a successful run, your SkyLady mod folder should look like this:</ins>
 - **meshes**
@@ -77,6 +87,18 @@ Note: For future runs, all files should be generated directly inside your SkyLad
 - SkyLadyTempTemplates.json
 - SkyLady.esp (if split, also SkyLady_2.esp, etc.)
 
+## Rerunning the Patcher
+
+1. Before you launch Synthesis, disable all active SkyLady plugins (.esp files) on the right side of MO2.
+
+2. Launch Synthesis through MO2.
+
+3. Configure the settings to your liking. If you want to keep previously assigned looks, make sure to enable appropriate settings.
+
+4. Run the patcher.
+
+5. After it's done, copy and save the Synthesis log if necessary. Close Synthesis.
+
 ## Patcher's Settings
 
 **Important Note:** SkyLady, as any other Synthesis Patcher, overwrites its previous output ESP with each run. For example, if you first patch NPCs from Skyrim.esm and later patch only Dawnguard.esm, the Skyrim.esm changes won’t automatically persist. To maintain previous appearances, SkyLady saves patched NPCs and their templates inside `SkyLadyTempTemplates.json`. Use the `Preserve Last Run Appearances` and `NPCs with Locked Templates` settings explained below to reapply the stored templates in your next run. Check each setting’s description to control which NPCs keep their prior looks versus receiving new ones. If unsure, ask in the Posts section.
@@ -84,6 +106,9 @@ Note: For future runs, all files should be generated directly inside your SkyLad
 **WARNING:** The SkyLadyTempTemplates.json file only keeps track of your last session. Any previous sessions are lost.
 
 By default, SkyLady will patch ALL mods in your load order. If that's not what you want, you can customize this by using settings explained bellow.
+
+- **Force ESP Splitting**:
+Used to overcome the 254-master limit. Enable this if Synthesis gives you "Too Many Masters" error.
 
 - **Patch Single NPC Only** (or more):
 This option allows you to select individual NPCs and assign them random female appearances, without touching other NPCs (whether patched or unpatched). This is useful when you only want to "feminize" certain NPCs or if you don't like how certain NPCs ended up looking after your last SkyLady run. It allows you to select such NPCs and "roll the dice" again, giving them new random looks.
