@@ -71,6 +71,10 @@ namespace SkyLady.SkyLady
         [SynthesisTooltip("If enabled, custom races with no female templates will use NordRace and ImperialRace templates as a fallback. If disabled, a matching race is required.")]
         public bool UseDefaultRaceFallback { get; set; } = false;
 
+        [SynthesisSettingName("Patch Non-Unique NPCs Only")]
+        [SynthesisTooltip("If enabled, only NPCs without the IsUnique flag are patched, unless locked in 'NPCs with Locked Templates' or selected in 'NPCs to Patch' with 'Patch Single NPC Only' enabled.")]
+        public bool PatchNonUniqueOnly { get; set; } = false;
+
         [SynthesisSettingName("NPCs with Locked Templates")]
         [SynthesisTooltip("Select NPCs to lock their current templates, ensuring the patcher reuses them in future runs.")]
         public List<LockedNpcTemplate> LockedTemplates { get; set; } = [];
@@ -789,12 +793,24 @@ namespace SkyLady.SkyLady
 
                 if (race == null || !humanoidRaces.Contains(race) || isFemale || isPlayer || isPreset)
                 {
+                    filteredNpcs[npc.EditorID + " (" + npc.FormKey.IDString() + ")"] = $"Filtered ({(isFemale ? "Female" : isPlayer ? "Player" : isPreset ? "Preset" : "Invalid Race")})";
                     skippedDueToFilter++;
                     continue;
                 }
 
                 bool shouldPatchNew = true;
                 bool isLocked = lockedNpcs.ContainsKey(npc.FormKey);
+
+                // Skip unique NPCs unless locked or selected in NpcsToPatch with PatchSingleNpcOnly
+                if (settings.PatchNonUniqueOnly &&
+                    npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Unique) &&
+                    !isLocked &&
+                    !(settings.PatchSingleNpcOnly && settings.NpcsToPatch.Any(n => n.Npc.FormKey == npc.FormKey)))
+                {
+                    filteredNpcs[npc.EditorID + " (" + npc.FormKey.IDString() + ")"] = "Filtered (Unique NPC)";
+                    skippedDueToFilter++;
+                    continue;
+                }
 
                 // Skip mode and blacklist checks for locked NPCs
                 if (!isLocked)
@@ -818,9 +834,15 @@ namespace SkyLady.SkyLady
                     }
 
                     if (settings.ModsToExcludeFromPatching.Contains(npc.FormKey.ModKey))
+                    {
+                        blacklistedMaleNpcsByMod[npc.FormKey.ModKey] = blacklistedMaleNpcsByMod.GetValueOrDefault(npc.FormKey.ModKey, 0) + 1;
                         continue;
+                    }
                     if (settings.NpcsToExcludeFromPatching.Any(ex => ex.FormKey == npc.FormKey))
+                    {
+                        blacklistedMaleNpcsByMod[npc.FormKey.ModKey] = blacklistedMaleNpcsByMod.GetValueOrDefault(npc.FormKey.ModKey, 0) + 1;
                         continue;
+                    }
                 }
 
                 var npcFid = npc.FormKey.IDString();
@@ -1353,7 +1375,7 @@ namespace SkyLady.SkyLady
                             new BinaryWriteParameters { ModKey = ModKeyOption.NoCheck });
                     }
                     Console.WriteLine("Data Folder Path: " + state.DataFolderPath);
-                    throw new Exception("This error indicates that the patcher ran successfully. The final ESP was split due to the 254-master limit. This error is intentional to prevent Synthesis from crashing and will be removed once ESP splitting is officially implemented in the Synthesis application.");
+                    throw new Exception("This error indicates that the patcher ran successfully. The final ESP was split due to Force ESP Splitting or master count. This error is intentional to prevent Synthesis from crashing and will be removed once ESP splitting is officially implemented in the Synthesis application.");
                 }
             }
         }
