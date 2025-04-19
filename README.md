@@ -126,9 +126,11 @@ Alternatively locate unpatched NPCs, find their race in xEdit, and add it to `Sk
 
 - **NPCs with Locked Templates**: Lock NPCs’ templates for consistency. If you really like how certain patched NPCs look, you can add them to this list to lock their appearance. This means they will keep their last assigned appearance during subsequent runs until you unlock them (remove from the list). This setting overrides all other settings and blacklists (except `Template Mod Blacklist`).
 
-- **Template Mod Blacklist**: Exclude mods from template collection. The patcher scans your load order for compatible female templates and randomly assigns them to male NPCs. If you want to prevent certain templates from being used (like vanilla-looking templates from Skyrim.esm), add those mods to this list.
+- **Template Mod Blacklist**: Exclude mods from template collection. The patcher scans your load order for compatible female templates and randomly assigns them to male NPCs. If you want to prevent certain templates from being used (like vanilla-looking templates from quest mods without NPC replacers), add those mods to this list.
 
-For best visual results I recommend adding Skyrim.esm and all DLC plugins, as well as CC plugins. If you do this, make sure you have plenty of other mods that contain valid female templates, like NPC replacers, female follower mods etc. Otherwise you might get repeating looks or unpatched NPCs.
+SkyLady currently doesn't support templates from mods that store their facegen files inside BSA, so they are automatically skipped. This means you don't have to exclude mods like Skyrim.esm (and DLCs) as their vanilla templates are excluded by default.
+
+That means you should make sure that you have plenty of other mods that contain valid female templates, like NPC replacers, female follower mods etc. Otherwise you might get repeating looks or unpatched NPCs. 
 
 - **Target Mods to Patch**: Limit patching to specific mods. If you don't want to patch your entire load order, but only a handful of mods, add them to this list. Only male NPCs present in the listed mods will be patched.
 
@@ -142,7 +144,7 @@ For best visual results I recommend adding Skyrim.esm and all DLC plugins, as we
 - **What is a Template?**: The term "template" has many meanings in Skyrim modding, but for the purpose of SkyLady, we will use our own. By a "template" we understand a female NPC from your load order used as a source for appearance data (e.g. head parts, tint layers, facegen files, hair color, height, weight). In other words, it's a look of a female NPC.
 - **How Are Templates Selected?**:
   - Valid templates are female NPCs from humanoid races (defined in `SkyLady races.txt`).
-  - They must not be from blacklisted mods (Template Mods Blacklist), and require loose facegen files (except for vanilla plugins like Skyrim.esm, Dawnguard.esm, etc.).
+  - They must not be from blacklisted mods (Template Mods Blacklist), and require loose facegen files (templates from plugins like Skyrim.esm are automatically excluded, because they use BSA).
   - Templates are grouped by race, with selection based on `SkyLady Race Compatibility.txt`.
 - **Adding New Templates**: To expand the template pool, install mods with female NPCs (e.g., follower mods or female replacer mods), ensuring they have loose facegen files.
 - **Custom Races**:
@@ -159,7 +161,7 @@ SkyLady was tested using Skyrim SE, but should work with AE and VR.
 
 SkyLady should be compatible with nearly all mods, as it's a Synthesis patcher. Male NPC replacers should be disabled or placed above SkyLady.esp to avoid conflicts. Male NPC replacers based on SkyPatcher might cause problems and should be disabled (if patching the same NPCs)
 
-Appearance templates from vanilla Skyrim plugins (Skyrim.esm, Dawnguard.esm, etc.) are supported without loose facegen files. Modded templates require loose facegen files. For modded setups, blacklist mods with vanilla appearances to prioritize custom templates.
+Appearance templates from base Skyrim plugins (Skyrim.esm, Dawnguard.esm, etc.) are NOT supported, as they don't have loose facegen files (they are in BSA). All valid templates require loose facegen files.
 
 Custom races aren’t patched by default unless added to `SkyLady races.txt` in your SkyLady mod folder. Add the race’s EditorID (found in xEdit under the RACE record), and ensure female NPCs of that race exist with loose facegen files. If only male NPCs of that race exist or the mod uses BSAs, configure `SkyLady Race Compatibility.txt` to allow templates from other races.
 
@@ -225,7 +227,7 @@ Patched NPCs will have their voices changed to their female equivalent (per `Sky
 A: It mostly depends on your preferrence. It can be run before/after other patchers, but I recommend to run it after other patchers at first. The main reason is that if one of your NPCs gets assigned a broken template (see Troubleshooting section above) from one of your other mods (like old follower mods), they might cause CTD when you enter their cell. This can be easily fixed by assigning a new template to only that NPC using Patch Single NPC Only option. And it's easier to do if you run this patcher last.
 
 **Q: Does SkyLady work with unmodded vanilla Skyrim?**
-**A:** Yes, it will patch NPCs with templates from Skyrim.esm and DLCs without requiring loose facegen files.
+**A:** At the moment, no. You need to have mods with loose facegen files installed, like female NPC replacers or female follower mods. I'm working on a way to allow usage of templates from BSA files.
 
 **Q: Does it require a new game?**
 **A:** No, technically it shouldn't cause any problems.
