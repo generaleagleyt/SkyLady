@@ -120,25 +120,35 @@ This option allows you to select individual NPCs and assign them random female a
 - **Preserve Last Run Appearances**: *(This option is always internally enabled when using `Patch Single NPC Only`.)*
   Enabling this option will ensure that all previously patched NPCs will keep their last assigned appearance. If you install a new mod and want to patch it with SkyLady, while keeping current NPC looks, enable this option. New NPCs will get patched while the others remain the same.
 
-- **Use Default Race Fallback**: Use Nord and Imperial templates for custom races. SkyLady works by searching your load order for elligible NPCs based on their race, and assigning them random female templates of the same or compatible race. If an NPC has a race that is not included inside `SkyLady races.txt`, it won't be patched (will stay male). If the race **IS** inside the TXT file, the NPC will be patched with a female template of the same race, or of a compatible race (based on the `SkyLady Race Compatibility.txt`). If a race IS inside `SkyLady races.txt`, but it doesn't have a valid female template nor a valid compatible race, this setting will make sure it's patched using a random template chosen from NordRace or ImperialRace template pools. Otherwise the NPC won't be patched (stays male).
+- **Use Default Race Fallback**:
+Use Nord and Imperial templates for custom races. SkyLady works by searching your load order for elligible NPCs based on their race, and assigning them random female templates of the same or compatible race. If an NPC has a race that is not included inside `SkyLady races.txt`, it won't be patched (will stay male). If the race **IS** inside the TXT file, the NPC will be patched with a female template of the same race, or of a compatible race (based on the `SkyLady Race Compatibility.txt`). If a race IS inside `SkyLady races.txt`, but it doesn't have a valid female template nor a valid compatible race, this setting will make sure it's patched using a random template chosen from NordRace or ImperialRace template pools. Otherwise the NPC won't be patched (stays male).
 
 Alternatively locate unpatched NPCs, find their race in xEdit, and add it to `SkyLady races.txt`.
 
-- **NPCs with Locked Templates**: Lock NPCs’ templates for consistency. If you really like how certain patched NPCs look, you can add them to this list to lock their appearance. This means they will keep their last assigned appearance during subsequent runs until you unlock them (remove from the list). This setting overrides all other settings and blacklists (except `Template Mod Blacklist`).
+- **Patch Non-Unique NPCs Only**:
+Only non-unique NPCs (those without "IsUnique" flag) will be patched.
 
-- **Template Mod Blacklist**: Exclude mods from template collection. The patcher scans your load order for compatible female templates and randomly assigns them to male NPCs. If you want to prevent certain templates from being used (like vanilla-looking templates from quest mods without NPC replacers), add those mods to this list.
+- **NPCs with Locked Templates**:
+Lock NPCs’ templates for consistency. If you really like how certain patched NPCs look, you can add them to this list to lock their appearance. This means they will keep their last assigned appearance during subsequent runs until you unlock them (remove from the list). This setting overrides all other settings and blacklists (except `Template Mod Blacklist`).
+
+- **Template Mod Blacklist**:
+Exclude mods from template collection. The patcher scans your load order for compatible female templates and randomly assigns them to male NPCs. If you want to prevent certain templates from being used (like vanilla-looking templates from quest mods without NPC replacers), add those mods to this list.
 
 SkyLady currently doesn't support templates from mods that store their facegen files inside BSA, so they are automatically skipped. This means you don't have to exclude mods like Skyrim.esm (and DLCs) as their vanilla templates are excluded by default.
 
 That means you should make sure that you have plenty of other mods that contain valid female templates, like NPC replacers, female follower mods etc. Otherwise you might get repeating looks or unpatched NPCs. 
 
-- **Target Mods to Patch**: Limit patching to specific mods. If you don't want to patch your entire load order, but only a handful of mods, add them to this list. Only male NPCs present in the listed mods will be patched.
+- **Target Mods to Patch**:
+Limit patching to specific mods. If you don't want to patch your entire load order, but only a handful of mods, add them to this list. Only male NPCs present in the listed mods will be patched.
 
-- **Mods to Exclude from Patching**: Skip mods from patching. If you want male NPCs from certain mods to remain male, add them here.
+- **Mods to Exclude from Patching**:
+Skip mods from patching. If you want male NPCs from certain mods to remain male, add them here.
 
-- **NPCs to Exclude from Patching**: Skip specific NPCs. If you want specific NPCs to remain male, add them here. You need to know their EditorID.
+- **NPCs to Exclude from Patching**:
+Skip specific NPCs. If you want specific NPCs to remain male, add them here. You need to know their EditorID.
 
-- **Flag Output Plugins as ESL**: Automatically flag split ESP plugins as ESL (ESP-FE). Synthesis Profile Setting that does this doesn't work on split ESP plugins yet, so you can use this option instead. Only applies if the ESP was split.
+- **Flag Output Plugins as ESL**:
+Automatically flag split ESP plugins as ESL (ESP-FE). Synthesis Profile Setting that does this doesn't work on split ESP plugins yet, so you can use this option instead. Only applies if the ESP was split.
 
 ## Understanding Templates
 - **What is a Template?**: The term "template" has many meanings in Skyrim modding, but for the purpose of SkyLady, we will use our own. By a "template" we understand a female NPC from your load order used as a source for appearance data (e.g. head parts, tint layers, facegen files, hair color, height, weight). In other words, it's a look of a female NPC.
