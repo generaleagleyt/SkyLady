@@ -123,7 +123,7 @@ namespace SkyLady.SkyLady
                 .Run(args);
         }
 
-        // Helper method to perform batch file copying
+        // Helper method to perform batch file copying with retry logic
         private static void BatchCopyFiles(List<(string SourcePath, string DestPath)> fileCopyOperations)
         {
             if (fileCopyOperations.Count == 0) return;
@@ -143,8 +143,30 @@ namespace SkyLady.SkyLady
 
             foreach (var (sourcePath, destPath) in fileCopyOperations)
             {
-                File.Copy(sourcePath, destPath, true);
-                Console.WriteLine($"Copied file to: {destPath}");
+                bool success = false;
+                int maxRetries = 2;
+                int retryCount = 0;
+
+                while (!success && retryCount <= maxRetries)
+                {
+                    try
+                    {
+                        File.Copy(sourcePath, destPath, true);
+                        Console.WriteLine($"Copied file to: {destPath}");
+                        success = true;
+                    }
+                    catch (DirectoryNotFoundException ex)
+                    {
+                        retryCount++;
+                        if (retryCount > maxRetries)
+                        {
+                            Console.WriteLine($"Failed to copy {destPath} after {maxRetries + 1} attempts: {ex.Message}");
+                            throw;
+                        }
+                        Console.WriteLine($"Attempt {retryCount} failed for {destPath}: {ex.Message}. Retrying in 2 seconds...");
+                        Thread.Sleep(2000);
+                    }
+                }
             }
         }
 
@@ -233,40 +255,40 @@ namespace SkyLady.SkyLady
                     File.WriteAllLines(racesPath,
                     [
                     "# SkyLady Races Configuration",
-                "# Back up this file before making changes.",
-                "# Lists the races eligible for patching by SkyLady (e.g., NordRace, ArgonianRace).",
-                "# Format: One race EditorID per line.",
-                "# These races determine which NPCs can be transformed with female templates.",
-                "# Add custom races from mods to include them, or remove races to exclude. Excluded races won't be patched",
-                "# Lines starting with # or empty lines are ignored.",
-                "",
-                "ArgonianRace",
-                "BretonRace",
-                "DarkElfRace",
-                "DremoraRace",
-                "ElderRace",
-                "HighElfRace",
-                "ImperialRace",
-                "KhajiitRace",
-                "NordRace",
-                "OrcRace",
-                "RedguardRace",
-                "WoodElfRace",
-                "ArgonianRaceVampire",
-                "BretonRaceVampire",
-                "DarkElfRaceVampire",
-                "ElderRaceVampire",
-                "HighElfRaceVampire",
-                "ImperialRaceVampire",
-                "NordRaceVampire",
-                "KhajiitRaceVampire",
-                "OrcRaceVampire",
-                "RedguardRaceVampire",
-                "WoodElfRaceVampire",
-                "DA13AfflictedRace",
-                "COTRRace",
-                "ArgonianRaceKZ",
-                "KhajiitRaceKZ"
+                    "# Back up this file before making changes.",
+                    "# Lists the races eligible for patching by SkyLady (e.g., NordRace, ArgonianRace).",
+                    "# Format: One race EditorID per line.",
+                    "# These races determine which NPCs can be transformed with female templates.",
+                    "# Add custom races from mods to include them, or remove races to exclude. Excluded races won't be patched",
+                    "# Lines starting with # or empty lines are ignored.",
+                    "",
+                    "ArgonianRace",
+                    "BretonRace",
+                    "DarkElfRace",
+                    "DremoraRace",
+                    "ElderRace",
+                    "HighElfRace",
+                    "ImperialRace",
+                    "KhajiitRace",
+                    "NordRace",
+                    "OrcRace",
+                    "RedguardRace",
+                    "WoodElfRace",
+                    "ArgonianRaceVampire",
+                    "BretonRaceVampire",
+                    "DarkElfRaceVampire",
+                    "ElderRaceVampire",
+                    "HighElfRaceVampire",
+                    "ImperialRaceVampire",
+                    "NordRaceVampire",
+                    "KhajiitRaceVampire",
+                    "OrcRaceVampire",
+                    "RedguardRaceVampire",
+                    "WoodElfRaceVampire",
+                    "DA13AfflictedRace",
+                    "COTRRace",
+                    "ArgonianRaceKZ",
+                    "KhajiitRaceKZ"
                     ]);
                     Console.WriteLine($"Created default SkyLady races.txt at {racesPath}.");
                 }
@@ -283,24 +305,24 @@ namespace SkyLady.SkyLady
                     File.WriteAllLines(partsToCopyPath,
                     [
                     "# SkyLady Parts to Copy Configuration",
-                "# Adjusting this file is not recommended, as it may cause unintended behavior. Only proceed if you know what you are doing.",
-                "# Back up this file before making changes.",
-                "# Lists NPC appearance components to copy from female templates (e.g., PNAM, Tint Layers).",
-                "# Format: One component identifier per line.",
-                "# These settings control which visual aspects are applied to patched NPCs.",
-                "# Lines starting with # or empty lines are ignored.",
-                "",
-                "PNAM",
-                "HEDP",
-                "WNAM",
-                "QNAM",
-                "NAM9",
-                "NAMA",
-                "Tint Layers",
-                "FTST",
-                "HCLF",
-                "NAM7",
-                "NAM6"
+                    "# Adjusting this file is not recommended, as it may cause unintended behavior. Only proceed if you know what you are doing.",
+                    "# Back up this file before making changes.",
+                    "# Lists NPC appearance components to copy from female templates (e.g., PNAM, Tint Layers).",
+                    "# Format: One component identifier per line.",
+                    "# These settings control which visual aspects are applied to patched NPCs.",
+                    "# Lines starting with # or empty lines are ignored.",
+                    "",
+                    "PNAM",
+                    "HEDP",
+                    "WNAM",
+                    "QNAM",
+                    "NAM9",
+                    "NAMA",
+                    "Tint Layers",
+                    "FTST",
+                    "HCLF",
+                    "NAM7",
+                    "NAM6"
                     ]);
                     Console.WriteLine($"Created default SkyLady partsToCopy.txt at {partsToCopyPath}.");
                 }
@@ -317,46 +339,46 @@ namespace SkyLady.SkyLady
                     File.WriteAllLines(raceCompatibilityPath,
                     [
                     "# SkyLady Race Compatibility Configuration",
-                "# Back up this file before making changes.",
-                "# Defines which races can share female templates.",
-                "# Format:",
-                "# Race: CompatibleRace1, CompatibleRace2 ...",
-                "# Controls template matching for patched NPCs; broader mappings increase variety.",
-                "# Add mod races or adjust mappings to suit your needs.",
-                "#",
-                "# Example:",
-                "# NordRace: NordRace, Imperial Race",
-                "# This means that male NPCs of NordRace can receive templates from both NordRace and ImperialRace template pools.",
-                "# ",
-                "# Lines starting with # or empty lines are ignored.",
-                "",
-                "NordRace: NordRace",
-                "NordRaceVampire: NordRace, NordRaceVampire",
-                "ImperialRace: ImperialRace",
-                "ImperialRaceVampire: ImperialRace, ImperialRaceVampire",
-                "DarkElfRace: DarkElfRace",
-                "DarkElfRaceVampire: DarkElfRace, DarkElfRaceVampire",
-                "ArgonianRace: ArgonianRace",
-                "ArgonianRaceVampire: ArgonianRace, ArgonianRaceVampire",
-                "KhajiitRace: KhajiitRace",
-                "KhajiitRaceVampire: KhajiitRace, KhajiitRaceVampire",
-                "HighElfRace: HighElfRace",
-                "HighElfRaceVampire: HighElfRace, HighElfRaceVampire",
-                "WoodElfRace: WoodElfRace",
-                "WoodElfRaceVampire: WoodElfRace, WoodElfRaceVampire",
-                "BretonRace: BretonRace",
-                "BretonRaceVampire: BretonRace, BretonRaceVampire",
-                "RedguardRace: RedguardRace",
-                "RedguardRaceVampire: RedguardRace, RedguardRaceVampire",
-                "OrcRace: OrcRace",
-                "OrcRaceVampire: OrcRace, OrcRaceVampire",
-                "ElderRace: ElderRace",
-                "ElderRaceVampire: ElderRace, ElderRaceVampire",
-                "DremoraRace: DremoraRace",
-                "DA13AfflictedRace: DA13AfflictedRace",
-                "COTRRace: COTRRace, NordRace, ImperialRace",
-                "ArgonianRaceKZ: ArgonianRaceKZ",
-                "KhajiitRaceKZ: KhajiitRaceKZ"
+                    "# Back up this file before making changes.",
+                    "# Defines which races can share female templates.",
+                    "# Format:",
+                    "# Race: CompatibleRace1, CompatibleRace2 ...",
+                    "# Controls template matching for patched NPCs; broader mappings increase variety.",
+                    "# Add mod races or adjust mappings to suit your needs.",
+                    "#",
+                    "# Example:",
+                    "# NordRace: NordRace, Imperial Race",
+                    "# This means that male NPCs of NordRace can receive templates from both NordRace and ImperialRace template pools.",
+                    "# ",
+                    "# Lines starting with # or empty lines are ignored.",
+                    "",
+                    "NordRace: NordRace",
+                    "NordRaceVampire: NordRace, NordRaceVampire",
+                    "ImperialRace: ImperialRace",
+                    "ImperialRaceVampire: ImperialRace, ImperialRaceVampire",
+                    "DarkElfRace: DarkElfRace",
+                    "DarkElfRaceVampire: DarkElfRace, DarkElfRaceVampire",
+                    "ArgonianRace: ArgonianRace",
+                    "ArgonianRaceVampire: ArgonianRace, ArgonianRaceVampire",
+                    "KhajiitRace: KhajiitRace",
+                    "KhajiitRaceVampire: KhajiitRace, KhajiitRaceVampire",
+                    "HighElfRace: HighElfRace",
+                    "HighElfRaceVampire: HighElfRace, HighElfRaceVampire",
+                    "WoodElfRace: WoodElfRace",
+                    "WoodElfRaceVampire: WoodElfRace, WoodElfRaceVampire",
+                    "BretonRace: BretonRace",
+                    "BretonRaceVampire: BretonRace, BretonRaceVampire",
+                    "RedguardRace: RedguardRace",
+                    "RedguardRaceVampire: RedguardRace, RedguardRaceVampire",
+                    "OrcRace: OrcRace",
+                    "OrcRaceVampire: OrcRace, OrcRaceVampire",
+                    "ElderRace: ElderRace",
+                    "ElderRaceVampire: ElderRace, ElderRaceVampire",
+                    "DremoraRace: DremoraRace",
+                    "DA13AfflictedRace: DA13AfflictedRace",
+                    "COTRRace: COTRRace, NordRace, ImperialRace",
+                    "ArgonianRaceKZ: ArgonianRaceKZ",
+                    "KhajiitRaceKZ: KhajiitRaceKZ"
                     ]);
                     Console.WriteLine($"Created default SkyLady Race Compatibility.txt at {raceCompatibilityPath}.");
                 }
@@ -373,71 +395,71 @@ namespace SkyLady.SkyLady
                     File.WriteAllLines(voiceCompatibilityPath,
                     [
                     "# SkyLady Voice Compatibility Configuration",
-                "# Back up this file before making changes.",
-                "# ",
-                "# [VoiceMap]",
-                "# For male-to-female voice mappings. If an NPC used a male voice on the left side before running the patcher, it will end up with one of the female voices on the right side.",
-                "# You can add more than one voice to the right side, in which case a random one will be chosen.",
-                "# Example:",
-                "# MaleBandit: FemaleCommoner, FemaleSultry",
-                "# ",
-                "# [RaceVoiceFallbacks]",
-                "# For race-specific fallback voices. If a male NPC of the race on the left side contains a custom voice that is not mapped in [VoiceMap] section, it will randomly receive one of the voices on the right side. You can add custom voices to the [VoiceMap] section to assign them specific opposites.",
-                "# ",
-                "# Lines starting with # or empty lines are ignored.",
-                "",
-                "[VoiceMap]",
-                "MaleArgonian: FemaleArgonian",
-                "MaleBandit: FemaleCommoner",
-                "MaleBrute: FemaleCommander",
-                "MaleChild: FemaleChild",
-                "MaleCommander: FemaleCommander",
-                "MaleCommoner: FemaleCommoner",
-                "MaleCommonerAccented: FemaleCommoner",
-                "MaleCondescending: FemaleCondescending",
-                "MaleCoward: FemaleCoward",
-                "MaleDarkElf: FemaleDarkElf",
-                "MaleDrunk: FemaleSultry",
-                "MaleElfHaughty: FemaleElfHaughty",
-                "MaleEvenToned: FemaleEvenToned",
-                "MaleEvenTonedAccented: FemaleEvenToned",
-                "MaleGuard: FemaleCommander",
-                "MaleKhajiit: FemaleKhajiit",
-                "MaleNord: FemaleNord",
-                "MaleNordCommander: FemaleNord",
-                "MaleOldGrumpy: FemaleOldGrumpy",
-                "MaleOldKindly: FemaleOldKindly",
-                "MaleOrc: FemaleOrc",
-                "MaleSlyCynical: FemaleSultry",
-                "MaleSoldier: FemaleCommander",
-                "MaleUniqueGhost: FemaleUniqueGhost",
-                "MaleWarlock: FemaleCondescending",
-                "MaleYoungEager: FemaleYoungEager",
-                "DLC1MaleVampire: DLC1FemaleVampire",
-                "DLC2MaleDarkElfCommoner: DLC2FemaleDarkElfCommoner",
-                "DLC2MaleDarkElfCynical: FemaleDarkElf",
-                "",
-                "[RaceVoiceFallbacks]",
-                "NordRace: FemaleNord, FemaleEvenToned, FemaleCommander, FemaleYoungEager, FemaleSultry",
-                "NordRaceVampire: FemaleNord, FemaleEvenToned, FemaleCommander, FemaleYoungEager, FemaleSultry",
-                "DarkElfRace: FemaleDarkElf, DLC2FemaleDarkElfCommoner, FemaleCondescending",
-                "DarkElfRaceVampire: FemaleDarkElf, DLC2FemaleDarkElfCommoner, FemaleCondescending",
-                "ArgonianRace: FemaleArgonian",
-                "ArgonianRaceVampire: FemaleArgonian",
-                "KhajiitRace: FemaleKhajiit",
-                "KhajiitRaceVampire: FemaleKhajiit",
-                "HighElfRace: FemaleElfHaughty, FemaleEvenToned, FemaleYoungEager, FemaleSultry",
-                "HighElfRaceVampire: FemaleElfHaughty, FemaleEvenToned, FemaleYoungEager, FemaleSultry",
-                "WoodElfRace: FemaleEvenToned, FemaleYoungEager, FemaleSultry",
-                "WoodElfRaceVampire: FemaleEvenToned, FemaleYoungEager, FemaleSultry",
-                "BretonRace: FemaleEvenToned, FemaleYoungEager, FemaleSultry",
-                "BretonRaceVampire: FemaleEvenToned, FemaleYoungEager, FemaleSultry",
-                "ImperialRace: FemaleEvenToned, FemaleCommander, FemaleYoungEager, FemaleSultry",
-                "ImperialRaceVampire: FemaleEvenToned, FemaleCommander, FemaleYoungEager, FemaleSultry",
-                "RedguardRace: FemaleEvenToned, FemaleSultry, FemaleYoungEager",
-                "RedguardRaceVampire: FemaleEvenToned, FemaleSultry, FemaleYoungEager",
-                "OrcRace: FemaleOrc",
-                "OrcRaceVampire: FemaleOrc"
+                    "# Back up this file before making changes.",
+                    "# ",
+                    "# [VoiceMap]",
+                    "# For male-to-female voice mappings. If an NPC used a male voice on the left side before running the patcher, it will end up with one of the female voices on the right side.",
+                    "# You can add more than one voice to the right side, in which case a random one will be chosen.",
+                    "# Example:",
+                    "# MaleBandit: FemaleCommoner, FemaleSultry",
+                    "# ",
+                    "# [RaceVoiceFallbacks]",
+                    "# For race-specific fallback voices. If a male NPC of the race on the left side contains a custom voice that is not mapped in [VoiceMap] section, it will randomly receive one of the voices on the right side. You can add custom voices to the [VoiceMap] section to assign them specific opposites.",
+                    "# ",
+                    "# Lines starting with # or empty lines are ignored.",
+                    "",
+                    "[VoiceMap]",
+                    "MaleArgonian: FemaleArgonian",
+                    "MaleBandit: FemaleCommoner",
+                    "MaleBrute: FemaleCommander",
+                    "MaleChild: FemaleChild",
+                    "MaleCommander: FemaleCommander",
+                    "MaleCommoner: FemaleCommoner",
+                    "MaleCommonerAccented: FemaleCommoner",
+                    "MaleCondescending: FemaleCondescending",
+                    "MaleCoward: FemaleCoward",
+                    "MaleDarkElf: FemaleDarkElf",
+                    "MaleDrunk: FemaleSultry",
+                    "MaleElfHaughty: FemaleElfHaughty",
+                    "MaleEvenToned: FemaleEvenToned",
+                    "MaleEvenTonedAccented: FemaleEvenToned",
+                    "MaleGuard: FemaleCommander",
+                    "MaleKhajiit: FemaleKhajiit",
+                    "MaleNord: FemaleNord",
+                    "MaleNordCommander: FemaleNord",
+                    "MaleOldGrumpy: FemaleOldGrumpy",
+                    "MaleOldKindly: FemaleOldKindly",
+                    "MaleOrc: FemaleOrc",
+                    "MaleSlyCynical: FemaleSultry",
+                    "MaleSoldier: FemaleCommander",
+                    "MaleUniqueGhost: FemaleUniqueGhost",
+                    "MaleWarlock: FemaleCondescending",
+                    "MaleYoungEager: FemaleYoungEager",
+                    "DLC1MaleVampire: DLC1FemaleVampire",
+                    "DLC2MaleDarkElfCommoner: DLC2FemaleDarkElfCommoner",
+                    "DLC2MaleDarkElfCynical: FemaleDarkElf",
+                    "",
+                    "[RaceVoiceFallbacks]",
+                    "NordRace: FemaleNord, FemaleEvenToned, FemaleCommander, FemaleYoungEager, FemaleSultry",
+                    "NordRaceVampire: FemaleNord, FemaleEvenToned, FemaleCommander, FemaleYoungEager, FemaleSultry",
+                    "DarkElfRace: FemaleDarkElf, DLC2FemaleDarkElfCommoner, FemaleCondescending",
+                    "DarkElfRaceVampire: FemaleDarkElf, DLC2FemaleDarkElfCommoner, FemaleCondescending",
+                    "ArgonianRace: FemaleArgonian",
+                    "ArgonianRaceVampire: FemaleArgonian",
+                    "KhajiitRace: FemaleKhajiit",
+                    "KhajiitRaceVampire: FemaleKhajiit",
+                    "HighElfRace: FemaleElfHaughty, FemaleEvenToned, FemaleYoungEager, FemaleSultry",
+                    "HighElfRaceVampire: FemaleElfHaughty, FemaleEvenToned, FemaleYoungEager, FemaleSultry",
+                    "WoodElfRace: FemaleEvenToned, FemaleYoungEager, FemaleSultry",
+                    "WoodElfRaceVampire: FemaleEvenToned, FemaleYoungEager, FemaleSultry",
+                    "BretonRace: FemaleEvenToned, FemaleYoungEager, FemaleSultry",
+                    "BretonRaceVampire: FemaleEvenToned, FemaleYoungEager, FemaleSultry",
+                    "ImperialRace: FemaleEvenToned, FemaleCommander, FemaleYoungEager, FemaleSultry",
+                    "ImperialRaceVampire: FemaleEvenToned, FemaleCommander, FemaleYoungEager, FemaleSultry",
+                    "RedguardRace: FemaleEvenToned, FemaleSultry, FemaleYoungEager",
+                    "RedguardRaceVampire: FemaleEvenToned, FemaleSultry, FemaleYoungEager",
+                    "OrcRace: FemaleOrc",
+                    "OrcRaceVampire: FemaleOrc"
                     ]);
                     Console.WriteLine($"Created default SkyLady Voice Compatibility.txt at {voiceCompatibilityPath}.");
                 }
@@ -990,8 +1012,8 @@ namespace SkyLady.SkyLady
                                 }
                             }
 
-                            patchedNpc.Height = template.Height != 0.0f ? template.Height : 1.0f;
-                            patchedNpc.Weight = template.Weight != 0.0f ? template.Weight : 50.0f;
+                            patchedNpc.Height = template.Height;
+                            patchedNpc.Weight = template.Weight;
 
                             break;
                         }
@@ -1042,8 +1064,8 @@ namespace SkyLady.SkyLady
                                 }
                             }
 
-                            patchedNpc.Height = template.Height != 0.0f ? template.Height : 1.0f;
-                            patchedNpc.Weight = template.Weight != 0.0f ? template.Weight : 50.0f;
+                            patchedNpc.Height = template.Height;
+                            patchedNpc.Weight = template.Weight;
                         }
                     }
 
