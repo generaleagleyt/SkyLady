@@ -123,7 +123,7 @@ namespace SkyLady.SkyLady
                 .Run(args);
         }
 
-        // Helper method to perform batch file copying with retry logic
+        // Helper method to perform batch file copying
         private static void BatchCopyFiles(List<(string SourcePath, string DestPath)> fileCopyOperations)
         {
             if (fileCopyOperations.Count == 0) return;
@@ -143,50 +143,8 @@ namespace SkyLady.SkyLady
 
             foreach (var (sourcePath, destPath) in fileCopyOperations)
             {
-                bool success = false;
-                int maxRetries = 2;
-                int retryCount = 0;
-
-                while (!success && retryCount <= maxRetries)
-                {
-                    try
-                    {
-                        File.Copy(sourcePath, destPath, true);
-                        Console.WriteLine($"Copied file to: {destPath}");
-                        success = true;
-                    }
-                    catch (DirectoryNotFoundException ex)
-                    {
-                        retryCount++;
-                        if (retryCount > maxRetries)
-                        {
-                            Console.WriteLine($"Failed to copy {destPath} after {maxRetries + 1} attempts: {ex.Message}");
-                            throw;
-                        }
-                        Console.WriteLine($"Attempt {retryCount} failed for {destPath}: {ex.Message}. Retrying in 2 seconds...");
-                        Thread.Sleep(2000);
-                    }
-                }
-            }
-        }
-
-        // Helper method to delete existing facegen files for an NPC
-        private static void DeleteExistingFacegenFiles(string outputModFolder, FormKey npcFormKey)
-        {
-            var modKey = npcFormKey.ModKey.FileName.ToString();
-            var formId = npcFormKey.IDString();
-            var nifPath = Path.Combine(outputModFolder, "meshes", "actors", "character", "facegendata", "facegeom", modKey, $"00{formId}.nif");
-            var ddsPath = Path.Combine(outputModFolder, "textures", "actors", "character", "facegendata", "facetint", modKey, $"00{formId}.dds");
-
-            if (File.Exists(nifPath))
-            {
-                File.Delete(nifPath);
-                Console.WriteLine($"Deleted existing facegen .nif: {nifPath}");
-            }
-            if (File.Exists(ddsPath))
-            {
-                File.Delete(ddsPath);
-                Console.WriteLine($"Deleted existing facegen .dds: {ddsPath}");
+                File.Copy(sourcePath, destPath, true);
+                Console.WriteLine($"Copied file to: {destPath}");
             }
         }
 
@@ -209,35 +167,6 @@ namespace SkyLady.SkyLady
                 modFolderPath = Path.Combine(state.DataFolderPath, "SkyLady");
                 Directory.CreateDirectory(modFolderPath);
                 Console.WriteLine($"SkyLadyMarker.txt not found or invalid mod folder specified. Created default SkyLady mod folder at {modFolderPath}.");
-            }
-
-            // Clear previous facegen files before patching
-            try
-            {
-                var facegeomPath = Path.Combine(modFolderPath, "meshes", "actors", "character", "facegendata", "facegeom");
-                var facetintPath = Path.Combine(modFolderPath, "textures", "actors", "character", "facegendata", "facetint");
-
-                if (Directory.Exists(facegeomPath))
-                {
-                    foreach (var dir in Directory.GetDirectories(facegeomPath))
-                    {
-                        Directory.Delete(dir, true);
-                    }
-                }
-
-                if (Directory.Exists(facetintPath))
-                {
-                    foreach (var dir in Directory.GetDirectories(facetintPath))
-                    {
-                        Directory.Delete(dir, true);
-                    }
-                }
-
-                Console.WriteLine("Cleared previous facegen files before patching.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Warning: Failed to clear previous facegen files: {ex.Message}. Continuing with patching.");
             }
 
             // Define paths using the mod folder
@@ -914,8 +843,6 @@ namespace SkyLady.SkyLady
                             Console.WriteLine($"[{(isLocked ? "Locked" : "Preserved")}] No valid temp template found for {npc.EditorID ?? "Unnamed"}. Will assign new template now.");
                         }
                     }
-
-                    DeleteExistingFacegenFiles(modFolderPath, npc.FormKey);
 
                     patchedNpc = state.PatchMod.Npcs.GetOrAddAsOverride(npc);
                     if (patchedNpc == null)
