@@ -89,7 +89,7 @@ The error means that the patcher was successful. Continue to **Step 9.**
 
 ## Rerunning the Patcher
 
-1. Open your SkyLady mod folder and delete both 'meshes' and 'textures' folders inside it. 
+1. Open your SkyLady mod folder and delete both `meshes` and `textures` folders inside it. 
 
 2. Before you launch Synthesis, disable all active SkyLady plugins (.esp files) on the right side of MO2.
 
