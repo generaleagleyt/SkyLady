@@ -89,15 +89,17 @@ The error means that the patcher was successful. Continue to **Step 9.**
 
 ## Rerunning the Patcher
 
-1. Before you launch Synthesis, disable all active SkyLady plugins (.esp files) on the right side of MO2.
+1. Open your SkyLady mod folder and delete both 'meshes' and 'textures' folders inside it. 
 
-2. Launch Synthesis through MO2.
+2. Before you launch Synthesis, disable all active SkyLady plugins (.esp files) on the right side of MO2.
 
-3. Configure the settings to your liking. If you want to keep previously assigned looks, make sure to enable appropriate settings.
+3. Launch Synthesis through MO2.
 
-4. Run the patcher.
+4. Configure the settings to your liking. If you want to keep previously assigned looks, make sure to enable appropriate settings.
 
-5. After it's done, copy and save the Synthesis log if necessary. Close Synthesis.
+5. Run the patcher.
+
+6. After it's done, copy and save the Synthesis log if necessary. Close Synthesis.
 
 ## Patcher's Settings
 
