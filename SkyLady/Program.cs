@@ -83,6 +83,10 @@ namespace SkyLady.SkyLady
         [SynthesisTooltip("Mods to exclude from template collection (e.g., Skyrim.esm for modded setups to avoid vanilla looks). Vanilla mods require loose facegen files.")]
         public HashSet<ModKey> TemplateModBlacklist { get; set; } = [];
 
+        [SynthesisSettingName("Template Mod Whitelist")]
+        [SynthesisTooltip("Only female templates from these mods will be used. Leave empty to use templates from all mods (except those in Template Mod Blacklist).")]
+        public HashSet<ModKey> TemplateModWhitelist { get; set; } = [];
+
         [SynthesisSettingName("Target Mods to Patch")]
         [SynthesisTooltip("Select the mods to patch. Leave empty to patch the entire load order.")]
         public HashSet<ModKey> TargetModsToPatch { get; set; } = [];
@@ -152,6 +156,16 @@ namespace SkyLady.SkyLady
         {
             var settings = Settings.Value;
             Console.WriteLine("SkyLady (Side) running on .NET 8.0...");
+
+            // Log whitelist status for clarity
+            if (settings.TemplateModWhitelist.Any())
+            {
+                Console.WriteLine($"Template Whitelist active: Only using female templates from {settings.TemplateModWhitelist.Count} mod(s).");
+            }
+            else
+            {
+                Console.WriteLine("Template Whitelist is empty - using templates from all mods (except blacklisted ones).");
+            }
 
             // Locate the SkyLady mod folder using the user-specified setting
             string modFolderPath;
@@ -681,15 +695,21 @@ namespace SkyLady.SkyLady
                     if (npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female))
                     {
                         bool notBlacklisted = !blacklistedMods.Contains(npc.FormKey.ModKey.FileName);
+                        bool isWhitelisted = settings.TemplateModWhitelist.Count == 0 ||
+                                           settings.TemplateModWhitelist.Contains(npc.FormKey.ModKey);
+
                         var (nifExists, ddsExists) = facegenCache[(npc.FormKey.ModKey.FileName.ToString(), npc.FormKey.IDString())];
-                        if (notBlacklisted && nifExists && ddsExists)
+
+                        if (isWhitelisted && notBlacklisted && nifExists && ddsExists)
                         {
                             femaleTemplatesByRace[race] = femaleTemplatesByRace.GetValueOrDefault(race, []);
                             femaleTemplatesByRace[race].Add(npc);
                         }
                         else
                         {
-                            string reason = notBlacklisted ? "Missing loose facegen files" : "Blacklisted mod";
+                            string reason = !isWhitelisted ? "Not in Template Whitelist" :
+                                           !notBlacklisted ? "Blacklisted mod" :
+                                           "Missing loose facegen files";
                             skippedTemplates[npc.FormKey.ToString()] = (npc.FormKey.ModKey.FileName.ToString(), reason);
                         }
                     }
@@ -703,6 +723,13 @@ namespace SkyLady.SkyLady
                             continue;
                         }
                         maleNpcCount++;
+
+                        // Skip NPCs with Template Flags (Use Traits) from eligible count
+                        if (npc.Configuration.TemplateFlags.HasFlag(NpcConfiguration.TemplateFlag.Traits))
+                        {
+                            continue;
+                        }
+
                         if (settings.ModsToExcludeFromPatching.Contains(npc.FormKey.ModKey))
                         {
                             blacklistedMaleNpcsByMod[npc.FormKey.ModKey] = blacklistedMaleNpcsByMod.GetValueOrDefault(npc.FormKey.ModKey, 0) + 1;
@@ -736,6 +763,14 @@ namespace SkyLady.SkyLady
             {
                 if (patchedNpcs.Contains(npc.FormKey))
                     continue;
+
+                // === HARD SKIP FOR NPCs WITH "USE TRAITS" TEMPLATE FLAG ===
+                if (npc.Configuration.TemplateFlags.HasFlag(NpcConfiguration.TemplateFlag.Traits))
+                {
+                    filteredNpcs[npc.EditorID + " (" + npc.FormKey.IDString() + ")"] = "Filtered (Has Use Traits template flag)";
+                    skippedDueToFilter++;
+                    continue;
+                }
 
                 var isFemale = npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female);
                 var isPlayer = npc.EditorID?.Equals("Player", StringComparison.OrdinalIgnoreCase) ?? false;
@@ -1106,7 +1141,7 @@ namespace SkyLady.SkyLady
             }
             else
             {
-                Console.WriteLine($"Successfully patched {successfulPatches} out of {eligibleMaleNpcCount} male NPCs with facegen.");
+                Console.WriteLine($"Successfully patched {successfulPatches} out of {eligibleMaleNpcCount} eligible male NPCs with facegen.");
                 if (blacklistedMaleNpcsByMod.Count > 0)
                 {
                     Console.WriteLine("\nBlacklisted Male NPCs:");
