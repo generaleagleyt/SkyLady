@@ -71,6 +71,10 @@ namespace SkyLady.SkyLady
         [SynthesisTooltip("If enabled, custom races with no female templates will use NordRace and ImperialRace templates as a fallback. If disabled, a matching race is required.")]
         public bool UseDefaultRaceFallback { get; set; } = false;
 
+        [SynthesisSettingName("Change Voices")]
+        [SynthesisTooltip("If enabled, male voices will be changed to their female counterparts according to Voice Compatibility.txt. If disabled, original voices are preserved.")]
+        public bool ChangeVoices { get; set; } = true;
+
         [SynthesisSettingName("Patch Non-Unique NPCs Only")]
         [SynthesisTooltip("If enabled, only NPCs without the IsUnique flag are patched, unless locked in 'NPCs with Locked Templates' or selected in 'NPCs to Patch' with 'Patch Single NPC Only' enabled.")]
         public bool PatchNonUniqueOnly { get; set; } = false;
@@ -943,7 +947,8 @@ namespace SkyLady.SkyLady
 
                             patchedNpc.Configuration.Flags |= NpcConfiguration.Flag.Female;
 
-                            if (npc.Voice != null)
+                            // Voice changing (controlled by new setting)
+                            if (settings.ChangeVoices && npc.Voice != null)
                             {
                                 var voiceType = npc.Voice.TryResolve(state.LinkCache)?.EditorID;
                                 if (!string.IsNullOrEmpty(voiceType))
@@ -975,7 +980,7 @@ namespace SkyLady.SkyLady
                             }
 
                             patchedNpc.Height = template.Height;
-                            patchedNpc.Weight = template.Weight;
+                            patchedNpc.Weight = template.Weight;    
 
                             break;
                         }
@@ -995,7 +1000,8 @@ namespace SkyLady.SkyLady
 
                             patchedNpc.Configuration.Flags |= NpcConfiguration.Flag.Female;
 
-                            if (npc.Voice != null)
+                            // Voice changing (controlled by new setting)
+                            if (settings.ChangeVoices && npc.Voice != null)
                             {
                                 var voiceType = npc.Voice.TryResolve(state.LinkCache)?.EditorID;
                                 if (!string.IsNullOrEmpty(voiceType))
