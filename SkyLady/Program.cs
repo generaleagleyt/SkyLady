@@ -107,6 +107,14 @@ namespace SkyLady.SkyLady
         [SynthesisTooltip("If enabled, output plugins are flagged as ESL (Light Master) if they have 2048 or fewer new records.")]
         public bool FlagOutputAsEsl { get; set; } = false;
 
+        [SynthesisSettingName("Patch Only Female NPCs")]
+        [SynthesisTooltip("If enabled, the patcher will ONLY patch female NPCs from 'Female Target Mods' and will skip all male NPCs. If disabled, males are patched as usual (plus females if any mods are listed).")]
+        public bool PatchOnlyFemaleNPCs { get; set; } = false;
+
+        [SynthesisSettingName("Female Target Mods")]
+        [SynthesisTooltip("If any mods are added here, female NPCs from these mods will also be patched with random different female appearances (same race only). Leave empty to disable female patching.")]
+        public HashSet<ModKey> FemaleTargetMods { get; set; } = [];
+
         // Deprecated: Kept for backward compatibility, but hidden from GUI
         [SynthesisIgnoreSetting]
         public string SingleNpcBaseId { get; set; } = "";
@@ -687,10 +695,16 @@ namespace SkyLady.SkyLady
             // Collect female templates and count male NPCs (excluding Player and presets)
             int maleNpcCount = 0;
             int eligibleMaleNpcCount = 0;
-            int successfulPatches = 0;
+            int eligibleFemaleNpcCount = 0;
+            int newlyPatchedMaleCount = 0;    // Tracks males that got a NEW template
+            int lockedMaleCount = 0;          // Tracks males explicitly locked in the GUI
+            int preservedMaleCount = 0;       // Tracks males preserved due to "Preserve Last Run Appearances" setting
+            int successfulFemalePatches = 0;
+            int successfulPatches = 0;        // Keep for Single NPC mode
             int skippedDueToPatch = 0;
             int skippedDueToFilter = 0;
             var blacklistedMaleNpcsByMod = new Dictionary<ModKey, int>();
+
             foreach (var npc in state.LoadOrder.PriorityOrder.WinningOverrides<INpcGetter>())
             {
                 var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
@@ -700,11 +714,12 @@ namespace SkyLady.SkyLady
                     {
                         bool notBlacklisted = !blacklistedMods.Contains(npc.FormKey.ModKey.FileName);
                         bool isWhitelisted = settings.TemplateModWhitelist.Count == 0 ||
-                                           settings.TemplateModWhitelist.Contains(npc.FormKey.ModKey);
+                                            settings.TemplateModWhitelist.Contains(npc.FormKey.ModKey);
 
                         var (nifExists, ddsExists) = facegenCache[(npc.FormKey.ModKey.FileName.ToString(), npc.FormKey.IDString())];
 
-                        if (isWhitelisted && notBlacklisted && nifExists && ddsExists)
+                        // Blacklist wins if mod is in both lists
+                        if (notBlacklisted && isWhitelisted && nifExists && ddsExists)
                         {
                             femaleTemplatesByRace[race] = femaleTemplatesByRace.GetValueOrDefault(race, []);
                             femaleTemplatesByRace[race].Add(npc);
@@ -713,44 +728,82 @@ namespace SkyLady.SkyLady
                         {
                             string reason = !isWhitelisted ? "Not in Template Whitelist" :
                                            !notBlacklisted ? "Blacklisted mod" :
-                                           "Missing loose facegen files";
+                                            "Missing loose facegen files";
                             skippedTemplates[npc.FormKey.ToString()] = (npc.FormKey.ModKey.FileName.ToString(), reason);
                         }
+
+                        // === FIX: Count eligible females INSIDE the female check ===
+                        bool isFemaleTargetMod = settings.FemaleTargetMods.Contains(npc.FormKey.ModKey);
+                        bool isAllFemalesTarget = settings.PatchOnlyFemaleNPCs && settings.FemaleTargetMods.Count == 0;
+
+                        if (isFemaleTargetMod || isAllFemalesTarget)
+                        {
+                            if (npc.EditorID != null && (npc.EditorID.Equals("Player", StringComparison.OrdinalIgnoreCase) ||
+                                npc.EditorID.Contains("preset", StringComparison.OrdinalIgnoreCase)))
+                            {
+                                filteredNpcs[npc.EditorID + " (" + npc.FormKey.IDString() + ")"] = "Filtered (Player/Preset)";
+                                skippedDueToFilter++;
+                            }
+                            else if (npc.Configuration.TemplateFlags.HasFlag(NpcConfiguration.TemplateFlag.Traits))
+                            {
+                                // Skip
+                            }
+                            else if (settings.ModsToExcludeFromPatching.Contains(npc.FormKey.ModKey) ||
+                                settings.NpcsToExcludeFromPatching.Any(ex => ex.FormKey == npc.FormKey))
+                            {
+                                // Skip
+                            }
+                            else
+                            {
+                                eligibleFemaleNpcCount++;
+                                Console.WriteLine($"Found eligible female NPC: {npc.EditorID ?? "Unnamed"} ({npc.FormKey.IDString()}) (Race: {race})");
+                            }
+                        }
                     }
-                    else if (patchEntireLoadOrder || requiemKeys.Contains(npc.FormKey.ModKey))
+                    else if (!settings.PatchOnlyFemaleNPCs &&
+                             (patchEntireLoadOrder ||
+                              requiemKeys.Contains(npc.FormKey.ModKey) ||
+                              settings.FemaleTargetMods.Contains(npc.FormKey.ModKey)))
                     {
                         if (npc.EditorID != null && (npc.EditorID.Equals("Player", StringComparison.OrdinalIgnoreCase) ||
                             npc.EditorID.Contains("preset", StringComparison.OrdinalIgnoreCase)))
                         {
                             filteredNpcs[npc.EditorID + " (" + npc.FormKey.IDString() + ")"] = "Filtered (Player/Preset)";
                             skippedDueToFilter++;
-                            continue;
                         }
-                        maleNpcCount++;
+                        else
+                        {
+                            maleNpcCount++;
 
-                        // Skip NPCs with Template Flags (Use Traits) from eligible count
-                        if (npc.Configuration.TemplateFlags.HasFlag(NpcConfiguration.TemplateFlag.Traits))
-                        {
-                            continue;
+                            // Skip NPCs with Template Flags (Use Traits) from eligible count
+                            if (npc.Configuration.TemplateFlags.HasFlag(NpcConfiguration.TemplateFlag.Traits))
+                            {
+                                // Skip
+                            }
+                            else if (settings.ModsToExcludeFromPatching.Contains(npc.FormKey.ModKey))
+                            {
+                                blacklistedMaleNpcsByMod[npc.FormKey.ModKey] = blacklistedMaleNpcsByMod.GetValueOrDefault(npc.FormKey.ModKey, 0) + 1;
+                            }
+                            else if (settings.NpcsToExcludeFromPatching.Any(excludedNpc => excludedNpc.FormKey == npc.FormKey))
+                            {
+                                blacklistedMaleNpcsByMod[npc.FormKey.ModKey] = blacklistedMaleNpcsByMod.GetValueOrDefault(npc.FormKey.ModKey, 0) + 1;
+                            }
+                            else
+                            {
+                                eligibleMaleNpcCount++;
+                                Console.WriteLine($"Found eligible male NPC: {npc.EditorID ?? "Unnamed"} ({npc.FormKey.IDString()}) (Race: {race})");
+                            }
                         }
-
-                        if (settings.ModsToExcludeFromPatching.Contains(npc.FormKey.ModKey))
-                        {
-                            blacklistedMaleNpcsByMod[npc.FormKey.ModKey] = blacklistedMaleNpcsByMod.GetValueOrDefault(npc.FormKey.ModKey, 0) + 1;
-                            continue;
-                        }
-                        if (settings.NpcsToExcludeFromPatching.Any(excludedNpc => excludedNpc.FormKey == npc.FormKey))
-                        {
-                            blacklistedMaleNpcsByMod[npc.FormKey.ModKey] = blacklistedMaleNpcsByMod.GetValueOrDefault(npc.FormKey.ModKey, 0) + 1;
-                            continue;
-                        }
-                        eligibleMaleNpcCount++;
-                        Console.WriteLine($"Found male NPC: {npc.EditorID ?? "Unnamed"} ({npc.FormKey.IDString()}) (Race: {race})");
                     }
                 }
             }
+
             Console.WriteLine($"Collected templates for {femaleTemplatesByRace.Count} races.");
             Console.WriteLine($"Total male humanoid NPCs in {(patchEntireLoadOrder ? "entire load order" : "target mods")}: {maleNpcCount}");
+            if (settings.FemaleTargetMods.Any())
+            {
+                Console.WriteLine($"Female patching enabled for {settings.FemaleTargetMods.Count} mod(s).");
+            }
             Console.WriteLine($"Skipped due to already patched: {skippedDueToPatch}");
             Console.WriteLine($"Skipped due to Player/Preset filter: {skippedDueToFilter}");
 
@@ -781,15 +834,45 @@ namespace SkyLady.SkyLady
                 var isPreset = npc.EditorID?.ToLowerInvariant().Contains("preset") ?? false;
                 var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
 
-                if (race == null || !humanoidRaces.Contains(race) || isFemale || isPlayer || isPreset)
+                bool isLocked = lockedNpcs.ContainsKey(npc.FormKey);
+                bool shouldPatchNew = true;
+
+                // Check if this NPC was explicitly selected in "Patch Single NPC Only"
+                bool isExplicitlySelected = settings.PatchSingleNpcOnly && settings.NpcsToPatch.Any(n => n.Npc.FormKey == npc.FormKey);
+
+                // Locked NPCs + Preserve Last Run Appearances have highest priority - always process them
+                if (isLocked || (settings.PreserveLastRunAppearances && !settings.PatchSingleNpcOnly))
                 {
-                    filteredNpcs[npc.EditorID + " (" + npc.FormKey.IDString() + ")"] = $"Filtered ({(isFemale ? "Female" : isPlayer ? "Player" : isPreset ? "Preset" : "Invalid Race")})";
-                    skippedDueToFilter++;
+                    // Continue to patching (will reuse locked or preserved template)
+                }
+                // Normal "Patch Only Female NPCs" mode - skip non-locked males (unless explicitly selected)
+                else if (settings.PatchOnlyFemaleNPCs && !isFemale && !isExplicitlySelected)
+                {
                     continue;
                 }
 
-                bool shouldPatchNew = true;
-                bool isLocked = lockedNpcs.ContainsKey(npc.FormKey);
+                // Check if this female has a saved template from a previous run
+                bool hasPreservedTemplate = tempTemplates.ContainsKey(npc.FormKey.ToString());
+
+                // Allow female NPCs if:
+                // 1. They are explicitly locked in the GUI
+                // 2. They are explicitly selected in "Patch Single NPC Only"
+                // 3. Their mod is in FemaleTargetMods
+                // 4. PatchOnlyFemaleNPCs is true AND FemaleTargetMods is empty (meaning ALL females)
+                // 5. They have a preserved template from the previous run (NEW)
+                bool isFemaleTarget = isFemale && (isLocked || isExplicitlySelected ||
+                                                   settings.FemaleTargetMods.Contains(npc.FormKey.ModKey) ||
+                                                   (settings.PatchOnlyFemaleNPCs && settings.FemaleTargetMods.Count == 0) ||
+                                                   hasPreservedTemplate);
+
+                if (race == null || !humanoidRaces.Contains(race) || (!isFemaleTarget && (isFemale || isPlayer || isPreset)))
+                {
+                    string filterReason = isFemale ? "Female (not in Female Target Mods)" :
+                                        isPlayer ? "Player" : isPreset ? "Preset" : "Invalid Race";
+                    filteredNpcs[npc.EditorID + " (" + npc.FormKey.IDString() + ")"] = $"Filtered ({filterReason})";
+                    skippedDueToFilter++;
+                    continue;
+                }
 
                 // Skip unique NPCs unless locked or selected in NpcsToPatch with PatchSingleNpcOnly
                 if (settings.PatchNonUniqueOnly &&
@@ -805,7 +888,12 @@ namespace SkyLady.SkyLady
                 // Skip mode and blacklist checks for locked NPCs
                 if (!isLocked)
                 {
-                    if (!patchEntireLoadOrder && !requiemKeys.Contains(npc.FormKey.ModKey))
+                    bool isTargetMod = patchEntireLoadOrder ||
+                                     requiemKeys.Contains(npc.FormKey.ModKey) ||
+                                     settings.FemaleTargetMods.Contains(npc.FormKey.ModKey) ||
+                                     isExplicitlySelected; // Always allow explicitly selected NPCs regardless of mod lists
+
+                    if (!isTargetMod)
                         continue;
 
                     if (settings.PatchSingleNpcOnly)
@@ -862,8 +950,8 @@ namespace SkyLady.SkyLady
                     if (isLocked || !shouldPatchNew)
                     {
                         if (tempTemplates.TryGetValue(npc.FormKey.ToString(), out var tempTemplateKey)
-                            && FormKey.TryFactory(tempTemplateKey, out var tempFormKey)
-                            && state.LinkCache.TryResolve<INpcGetter>(tempFormKey, out var tempLockedTemplate))
+                             && FormKey.TryFactory(tempTemplateKey, out var tempFormKey)
+                             && state.LinkCache.TryResolve<INpcGetter>(tempFormKey, out var tempLockedTemplate))
                         {
                             var tempLockedTemplateRace = tempLockedTemplate.Race.TryResolve(state.LinkCache)?.EditorID;
                             if (tempLockedTemplateRace != null && compatibleRaces.Contains(tempLockedTemplateRace))
@@ -879,7 +967,13 @@ namespace SkyLady.SkyLady
                         }
                         else
                         {
-                            Console.WriteLine($"[{(isLocked ? "Locked" : "Preserved")}] No valid temp template found for {npc.EditorID ?? "Unnamed"}. Will assign new template now.");
+                            // Silently skip if it's not locked and has no saved template.
+                            if (!isLocked)
+                            {
+                                continue;
+                            }
+                            // Only show the warning if the user explicitly locked an NPC but its template is missing
+                            Console.WriteLine($"[Locked] No valid temp template found for {npc.EditorID ?? "Unnamed"}. Will assign new template now.");
                         }
                     }
 
@@ -925,6 +1019,10 @@ namespace SkyLady.SkyLady
 
                         foreach (var candidate in validTemplates)
                         {
+                            // Prevent female from being assigned herself as template
+                            if (isFemale && candidate.FormKey == npc.FormKey)
+                                continue;
+
                             template = candidate;
                             var templateFid = template.FormKey.IDString();
                             var templateFileName = template.FormKey.ModKey.FileName.ToString();
@@ -1066,11 +1164,32 @@ namespace SkyLady.SkyLady
 
                     if (facegenCopied)
                     {
-                        successfulPatches++;
+                        successfulPatches++; // for Single NPC mode
+
+                        if (isFemale)
+                            successfulFemalePatches++;
+                        else
+                        {
+                            if (isLocked)
+                            {
+                                lockedMaleCount++;
+                            }
+                            else if (useLockedTemplate)
+                            {
+                                preservedMaleCount++;
+                            }
+                            else
+                            {
+                                newlyPatchedMaleCount++;
+                            }
+                        }
+
                         patchedNpcs.Add(npc.FormKey);
 
-                        currentRunTemplates[npc.FormKey.ToString()] = template?.FormKey.ToString() ?? "";
-                        Console.WriteLine($"Patched: {npc.EditorID ?? "Unnamed"} ({npc.FormKey}) using {template?.EditorID ?? "Unknown"} from {template?.FormKey.ModKey.FileName}");
+                        currentRunTemplates[npc.FormKey.ToString()] = template?.FormKey.ToString() ?? " ";
+
+                        string genderTag = isFemale ? "(Female - Female)" : "(Male - Female)";
+                        Console.WriteLine($"Patched: {npc.EditorID ?? "Unnamed"} ({npc.FormKey}) {genderTag} using {template?.EditorID ?? "Unknown"} from {template?.FormKey.ModKey.FileName}");
                     }
                     else
                     {
@@ -1147,7 +1266,31 @@ namespace SkyLady.SkyLady
             }
             else
             {
-                Console.WriteLine($"Successfully patched {successfulPatches} out of {eligibleMaleNpcCount} eligible male NPCs with facegen.");
+                // Only show the main male patching line if we actually patched NEW males
+                if (newlyPatchedMaleCount > 0)
+                {
+                    Console.WriteLine($"Successfully patched {newlyPatchedMaleCount} out of {eligibleMaleNpcCount} eligible male NPCs with facegen.");
+                }
+
+                // Show message for explicitly locked NPCs
+                if (lockedMaleCount > 0)
+                {
+                    Console.WriteLine($"Patched {lockedMaleCount} locked NPC(s) using their saved templates.");
+                }
+
+                // Show message for preserved NPCs (only triggers if the setting was enabled)
+                if (preservedMaleCount > 0)
+                {
+                    Console.WriteLine($"Preserved appearances for {preservedMaleCount} male NPC(s) from the previous run.");
+                }
+
+                if (settings.FemaleTargetMods.Any())
+                {
+                    var modNames = string.Join(", ", settings.FemaleTargetMods.Select(m => m.FileName));
+                    Console.WriteLine($"Successfully patched {successfulFemalePatches} eligible female NPCs with facegen.");
+                    Console.WriteLine($"Patched female NPCs from {settings.FemaleTargetMods.Count} mod(s): {modNames}");
+                }
+
                 if (blacklistedMaleNpcsByMod.Count > 0)
                 {
                     Console.WriteLine("\nBlacklisted Male NPCs:");
