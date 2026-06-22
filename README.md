@@ -2,7 +2,7 @@
 
 ![SkyLady Main Image](https://github.com/user-attachments/assets/75b2031b-2822-4570-98f6-e4642a45caf2)
 ## Overview
-**SkyLady** is a Synthesis patcher designed to turn all male NPCs into females. Utilizing the power of Synthesis framework, SkyLady is lightweight, script-free, and can process large load orders in minutes, making it an efficient tool for feminizing your Skyrim world.
+**SkyLady** is a Synthesis patcher designed to turn all male NPCs into females. Utilizing the power of Synthesis framework, SkyLady is lightweight, script-free, and can process large load orders in minutes, making it an efficient tool for feminizing your Skyrim world. As of version 1.1.0, it can now also patch female NPCs, giving them new random looks.
 
 ![SkyLady_Example_Ulfric(1)](https://github.com/user-attachments/assets/94823a5e-3837-496d-a694-4d82294f97ac)
 *The name change is not part of the patcher.*
