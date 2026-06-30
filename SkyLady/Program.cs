@@ -14,113 +14,7 @@ using Mutagen.Bethesda.Archives;
 
 namespace SkyLady.SkyLady
 {
-    // Class to represent an NPC in the GUI
-    public class SkyLadyNpc
-    {
-        [SynthesisOrder]
-        [SynthesisTooltip("The NPC to patch")]
-        public IFormLinkGetter<INpcGetter> Npc { get; set; } = FormLink<INpcGetter>.Null;
-
-        public override string ToString()
-        {
-            return Npc.IsNull ? "None" : Npc.FormKey.ToString();
-        }
-    }
-
-    // Class to represent an NPC with a locked template
-    public class LockedNpcTemplate
-    {
-        [SynthesisOrder]
-        [SynthesisTooltip("Select NPCs to lock their current templates, ensuring the patcher reuses them in future runs.")]
-        public IFormLinkGetter<INpcGetter> Npc { get; set; } = FormLink<INpcGetter>.Null;
-
-        [SynthesisIgnoreSetting]
-        public IFormLinkGetter<INpcGetter> Template { get; set; } = FormLink<INpcGetter>.Null;
-
-        public override string ToString()
-        {
-            if (Npc.IsNull) return "None";
-            return Template.IsNull ? Npc.FormKey.ToString() : $"{Npc.FormKey} (Template: {Template.FormKey})";
-        }
-    }
-
-    // Settings class for GUI
-    public class PatcherSettings
-    {
-        [SynthesisSettingName("Force ESP Splitting")]
-        [SynthesisTooltip("If you encounter 'Too Many Masters' Synthesis error, enable this option to split the final ESP.")]
-        public bool ForceEspSplitting { get; set; } = false;
-
-        [SynthesisSettingName("SkyLady Mod Folder")]
-        [SynthesisTooltip("Paste here a path to your SkyLady mod folder containing SkyLadyMarker.txt (e.g., C:\\Skyrim\\ModlistName\\mods\\SkyLady). Required for file creation.")]
-        public string SkyLadyModFolder { get; set; } = "";
-
-        [SynthesisSettingName("Patch Single NPC Only")]
-        [SynthesisTooltip("If enabled, only selected NPCs from target mods get new random templates. Non-selected NPCs preserve their last run appearances.")]
-        public bool PatchSingleNpcOnly { get; set; } = false;
-
-        [SynthesisSettingName("NPCs to Patch")]
-        [SynthesisTooltip("Select NPCs to receive new random templates when 'Patch Single NPC Only' is enabled.")]
-        public List<SkyLadyNpc> NpcsToPatch { get; set; } = [];
-
-        [SynthesisSettingName("Preserve Last Run Appearances")]
-        [SynthesisTooltip("In bulk mode, enables non-locked NPCs to reuse last run templates. In Single NPC mode, non-selected NPCs always preserve appearances.")]
-        public bool PreserveLastRunAppearances { get; set; } = false;
-
-        [SynthesisSettingName("Use Default Race Fallback")]
-        [SynthesisTooltip("If enabled, custom races with no female templates will use NordRace and ImperialRace templates as a fallback. If disabled, a matching race is required.")]
-        public bool UseDefaultRaceFallback { get; set; } = false;
-
-        [SynthesisSettingName("Change Voices")]
-        [SynthesisTooltip("If enabled, male voices will be changed to their female counterparts according to Voice Compatibility.txt. If disabled, original voices are preserved.")]
-        public bool ChangeVoices { get; set; } = true;
-
-        [SynthesisSettingName("Patch Non-Unique NPCs Only")]
-        [SynthesisTooltip("If enabled, only NPCs without the IsUnique flag are patched, unless locked in 'NPCs with Locked Templates' or selected in 'NPCs to Patch' with 'Patch Single NPC Only' enabled.")]
-        public bool PatchNonUniqueOnly { get; set; } = false;
-
-        [SynthesisSettingName("NPCs with Locked Templates")]
-        [SynthesisTooltip("Select NPCs to lock their current templates, ensuring the patcher reuses them in future runs.")]
-        public List<LockedNpcTemplate> LockedTemplates { get; set; } = [];
-
-        [SynthesisSettingName("Template Mod Blacklist")]
-        [SynthesisTooltip("Mods to exclude from template collection (e.g., Skyrim.esm for modded setups to avoid vanilla looks). Vanilla mods require loose facegen files.")]
-        public HashSet<ModKey> TemplateModBlacklist { get; set; } = [];
-
-        [SynthesisSettingName("Template Mod Whitelist")]
-        [SynthesisTooltip("Only female templates from these mods will be used. Leave empty to use templates from all mods (except those in Template Mod Blacklist).")]
-        public HashSet<ModKey> TemplateModWhitelist { get; set; } = [];
-
-        [SynthesisSettingName("Target Mods to Patch")]
-        [SynthesisTooltip("Select the mods to patch. Leave empty to patch the entire load order.")]
-        public HashSet<ModKey> TargetModsToPatch { get; set; } = [];
-
-        [SynthesisSettingName("Mods to Exclude from Patching")]
-        [SynthesisTooltip("Select mods to skip patching (e.g., mods with unique NPCs or custom appearances to preserve).")]
-        public HashSet<ModKey> ModsToExcludeFromPatching { get; set; } = [];
-
-        [SynthesisSettingName("NPCs to Exclude from Patching")]
-        [SynthesisTooltip("Select specific NPCs to skip patching (e.g., unique NPCs or those with custom appearances to preserve).")]
-        public List<IFormLinkGetter<INpcGetter>> NpcsToExcludeFromPatching { get; set; } = [];
-
-        [SynthesisSettingName("Flag Output Plugins as ESL")]
-        [SynthesisTooltip("If enabled, output plugins are flagged as ESL (Light Master) if they have 2048 or fewer new records.")]
-        public bool FlagOutputAsEsl { get; set; } = false;
-
-        [SynthesisSettingName("Patch Only Female NPCs")]
-        [SynthesisTooltip("If enabled, the patcher will ONLY patch female NPCs from 'Female Target Mods' and will skip all male NPCs. If disabled, males are patched as usual (plus females if any mods are listed).")]
-        public bool PatchOnlyFemaleNPCs { get; set; } = false;
-
-        [SynthesisSettingName("Female Target Mods")]
-        [SynthesisTooltip("If any mods are added here, female NPCs from these mods will also be patched with random different female appearances (same race only). Leave empty to disable female patching.")]
-        public HashSet<ModKey> FemaleTargetMods { get; set; } = [];
-
-        // Deprecated: Kept for backward compatibility, but hidden from GUI
-        [SynthesisIgnoreSetting]
-        public string SingleNpcBaseId { get; set; } = "";
-    }
-
-    public class Program
+        public class Program
     {
         private static readonly char[] LineSeparators = ['\n', '\r'];
 
@@ -735,8 +629,12 @@ namespace SkyLady.SkyLady
                         // === FIX: Count eligible females INSIDE the female check ===
                         bool isFemaleTargetMod = settings.FemaleTargetMods.Contains(npc.FormKey.ModKey);
                         bool isAllFemalesTarget = settings.PatchOnlyFemaleNPCs && settings.FemaleTargetMods.Count == 0;
+                        bool hasPreservedTemplate = tempTemplates.ContainsKey(npc.FormKey.ToString());
+                        bool isPreservationEnabled = settings.PreserveLastRunAppearances || settings.PatchSingleNpcOnly;
 
-                        if (isFemaleTargetMod || isAllFemalesTarget)
+                        // Count as eligible if they match target mods, OR all females are targeted, 
+                        // OR they have a preserved template AND a preservation setting is enabled
+                        if (isFemaleTargetMod || isAllFemalesTarget || (hasPreservedTemplate && isPreservationEnabled))
                         {
                             if (npc.EditorID != null && (npc.EditorID.Equals("Player", StringComparison.OrdinalIgnoreCase) ||
                                 npc.EditorID.Contains("preset", StringComparison.OrdinalIgnoreCase)))
@@ -749,7 +647,7 @@ namespace SkyLady.SkyLady
                                 // Skip
                             }
                             else if (settings.ModsToExcludeFromPatching.Contains(npc.FormKey.ModKey) ||
-                                settings.NpcsToExcludeFromPatching.Any(ex => ex.FormKey == npc.FormKey))
+                            settings.NpcsToExcludeFromPatching.Any(ex => ex.FormKey == npc.FormKey))
                             {
                                 // Skip
                             }
@@ -853,17 +751,18 @@ namespace SkyLady.SkyLady
 
                 // Check if this female has a saved template from a previous run
                 bool hasPreservedTemplate = tempTemplates.ContainsKey(npc.FormKey.ToString());
+                bool isPreservationEnabled = settings.PreserveLastRunAppearances || settings.PatchSingleNpcOnly;
 
                 // Allow female NPCs if:
                 // 1. They are explicitly locked in the GUI
                 // 2. They are explicitly selected in "Patch Single NPC Only"
                 // 3. Their mod is in FemaleTargetMods
                 // 4. PatchOnlyFemaleNPCs is true AND FemaleTargetMods is empty (meaning ALL females)
-                // 5. They have a preserved template from the previous run (NEW)
+                // 5. They have a preserved template from the previous run AND a preservation setting is enabled
                 bool isFemaleTarget = isFemale && (isLocked || isExplicitlySelected ||
                                                    settings.FemaleTargetMods.Contains(npc.FormKey.ModKey) ||
                                                    (settings.PatchOnlyFemaleNPCs && settings.FemaleTargetMods.Count == 0) ||
-                                                   hasPreservedTemplate);
+                                                   (hasPreservedTemplate && isPreservationEnabled));
 
                 if (race == null || !humanoidRaces.Contains(race) || (!isFemaleTarget && (isFemale || isPlayer || isPreset)))
                 {
