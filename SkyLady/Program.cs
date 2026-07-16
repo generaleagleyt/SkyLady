@@ -14,7 +14,7 @@ using Mutagen.Bethesda.Archives;
 
 namespace SkyLady.SkyLady
 {
-        public class Program
+    public class Program
     {
         private static readonly char[] LineSeparators = ['\n', '\r'];
 
@@ -1102,7 +1102,7 @@ namespace SkyLady.SkyLady
                             }
 
                             patchedNpc.Height = template.Height;
-                            patchedNpc.Weight = template.Weight;    
+                            patchedNpc.Weight = template.Weight;
 
                             break;
                         }
@@ -1434,6 +1434,13 @@ namespace SkyLady.SkyLady
             }
             else
             {
+                // Force ESP Splitting is OFF. Do NOT invoke the custom splitter here, even if the
+                // master count exceeds 250. The custom splitter cannot wire up cross-file masters
+                // for patch-created records (pseudo-copied RACEs, their ARMA overrides, and the NPCs
+                // that reference them), which scatters interdependent records across files and
+                // produces "Could not be resolved" errors. Instead we hand the finished PatchMod
+                // back so modern Synthesis can perform its NATIVE multi-master splitting, which
+                // correctly adds sibling plugins as masters and remaps FormKeys.
                 var contributingMods = new HashSet<ModKey>();
                 foreach (var rec in state.PatchMod.EnumerateMajorRecords())
                 {
@@ -1443,112 +1450,48 @@ namespace SkyLady.SkyLady
                     }
                 }
                 var masterCount = contributingMods.Count;
-                Console.WriteLine($"Calculated master count: {masterCount} (based on contributing mods)");
-                if (masterCount <= 250)
+                Console.WriteLine($"Calculated master count: {masterCount} (based on contributing mods).");
+                Console.WriteLine("Force ESP Splitting disabled - letting Synthesis write/split the output natively.");
+
+                if (masterCount > 250)
                 {
-                    // No splitting needed; let Synthesis handle the output naturally
-                    Console.WriteLine("No ESP splitting needed (master count under 250). Letting Synthesis write the output ESP.");
-
-                    if (settings.FlagOutputAsEsl)
-                    {
-                        bool canBeEsl = true;
-                        uint newRecordCount = 0;
-
-                        foreach (var rec in state.PatchMod.EnumerateMajorRecords())
-                        {
-                            if (rec.FormKey.ModKey.Equals(state.PatchMod.ModKey))
-                            {
-                                newRecordCount++;
-                                if (rec.FormKey.ID < 0x800 || rec.FormKey.ID > 0xFFF)
-                                {
-                                    canBeEsl = false;
-                                    Console.WriteLine($"Cannot flag output ESP as ESL: New record {rec.FormKey} has FormID outside ESL range (0x800 to 0xFFF).");
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (newRecordCount > 2048)
-                        {
-                            canBeEsl = false;
-                            Console.WriteLine($"Cannot flag output ESP as ESL: Exceeds 2048 new records (found {newRecordCount}).");
-                        }
-
-                        if (canBeEsl)
-                        {
-                            state.PatchMod.ModHeader.Flags |= SkyrimModHeader.HeaderFlag.Small;
-                            Console.WriteLine($"Flagged output ESP as ESL.");
-                        }
-                    }
-
-                    var recordCount = state.PatchMod.EnumerateMajorRecords().Count();
-                    Console.WriteLine($"Prepared single ESP for Synthesis output: Masters: {masterCount}, Records: {recordCount}");
+                    Console.WriteLine("WARNING: Master count exceeds 250. Ensure you are on a Synthesis version that supports native ESP splitting; otherwise enable 'Force ESP Splitting'.");
                 }
-                else
+
+                if (settings.FlagOutputAsEsl)
                 {
-                    var splitter = new MultiModFileSplitter();
-                    var splitMods = splitter.Split<ISkyrimMod, ISkyrimModGetter>(state.PatchMod, 250).ToList();
-                    Console.WriteLine($"Split into {splitMods.Count} mods:");
+                    bool canBeEsl = true;
+                    uint newRecordCount = 0;
 
-                    foreach (var mod in splitMods)
+                    foreach (var rec in state.PatchMod.EnumerateMajorRecords())
                     {
-                        mod.MasterReferences.Clear();
-                        mod.MasterReferences.AddRange(state.PatchMod.MasterReferences.Select(m => m.DeepCopy()));
-                    }
-
-                    if (settings.FlagOutputAsEsl)
-                    {
-                        foreach (var mod in splitMods)
+                        if (rec.FormKey.ModKey.Equals(state.PatchMod.ModKey))
                         {
-                            bool canBeEsl = true;
-                            uint newRecordCount = 0;
-
-                            foreach (var rec in mod.EnumerateMajorRecords())
-                            {
-                                if (rec.FormKey.ModKey.Equals(mod.ModKey))
-                                {
-                                    newRecordCount++;
-                                    if (rec.FormKey.ID < 0x800 || rec.FormKey.ID > 0xFFF)
-                                    {
-                                        canBeEsl = false;
-                                        Console.WriteLine($"Cannot flag split ESP as ESL: New record {rec.FormKey} has FormID outside ESL range (0x800 to 0xFFF).");
-                                        break;
-                                    }
-                                }
-                            }
-
-                            if (newRecordCount > 2048)
+                            newRecordCount++;
+                            if (rec.FormKey.ID < 0x800 || rec.FormKey.ID > 0xFFF)
                             {
                                 canBeEsl = false;
-                                Console.WriteLine($"Cannot flag split ESP as ESL: Exceeds 2048 new records (found {newRecordCount}).");
-                            }
-
-                            if (canBeEsl)
-                            {
-                                mod.ModHeader.Flags |= SkyrimModHeader.HeaderFlag.Small;
-                                Console.WriteLine($"Flagged split ESP as ESL.");
+                                Console.WriteLine($"Cannot flag output ESP as ESL: New record {rec.FormKey} has FormID outside ESL range (0x800 to 0xFFF).");
+                                break;
                             }
                         }
                     }
 
-                    for (int i = 0; i < splitMods.Count; i++)
+                    if (newRecordCount > 2048)
                     {
-                        var mod = splitMods[i];
-                        string outputFileName = i == 0
-                            ? state.PatchMod.ModKey.FileName.ToString()
-                            : $"{state.PatchMod.ModKey.FileName.ToString().Replace(".esp", "")}_{i + 1}.esp";
-                        Console.WriteLine($"Using Synthesis naming: {outputFileName}");
-
-                        var recordCount = mod.EnumerateMajorRecords().Count();
-                        Console.WriteLine($"Mod {i}: {outputFileName}, Records: {recordCount}");
-
-                        mod.WriteToBinary(
-                            Path.Combine(state.DataFolderPath, outputFileName),
-                            new BinaryWriteParameters { ModKey = ModKeyOption.NoCheck });
+                        canBeEsl = false;
+                        Console.WriteLine($"Cannot flag output ESP as ESL: Exceeds 2048 new records (found {newRecordCount}).");
                     }
-                    Console.WriteLine("Data Folder Path: " + state.DataFolderPath);
-                    throw new Exception("This error indicates that the patcher ran successfully. The final ESP was split due to Force ESP Splitting or master count. This error is intentional to prevent Synthesis from crashing and will be removed once ESP splitting is officially implemented in the Synthesis application.");
+
+                    if (canBeEsl)
+                    {
+                        state.PatchMod.ModHeader.Flags |= SkyrimModHeader.HeaderFlag.Small;
+                        Console.WriteLine($"Flagged output ESP as ESL.");
+                    }
                 }
+
+                var recordCount = state.PatchMod.EnumerateMajorRecords().Count();
+                Console.WriteLine($"Prepared ESP for Synthesis output: Masters: {masterCount}, Records: {recordCount}");
             }
         }
     }
