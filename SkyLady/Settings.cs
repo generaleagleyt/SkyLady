@@ -60,8 +60,12 @@ namespace SkyLady.SkyLady
         public bool PreserveLastRunAppearances { get; set; } = false;
 
         [SynthesisSettingName("Use Default Race Fallback")]
-        [SynthesisTooltip("If enabled, custom races with no female templates will use NordRace and ImperialRace templates as a fallback. If disabled, a matching race is required.")]
+        [SynthesisTooltip("If enabled, custom races with no female templates will use NordRace and ImperialRace templates as a fallback. If disabled, a matching race is required. Note: the race still needs to be inside SkyLady races.txt.")]
         public bool UseDefaultRaceFallback { get; set; } = false;
+
+        [SynthesisSettingName("Pseudo-Copy Race on Fallback")]
+        [SynthesisTooltip("Only applies when 'Use Default Race Fallback' is triggered. Instead of changing the race to Nord/Imperial, create a hybrid race that KEEPS the custom race's stats/keywords/tweaks but takes its body/appearance from the fallback race (Nord/Imperial).")]
+        public bool PseudoCopyRaceOnFallback { get; set; } = false;
 
         [SynthesisSettingName("Change Voices")]
         [SynthesisTooltip("If enabled, male voices will be changed to their female counterparts according to Voice Compatibility.txt. If disabled, original voices are preserved.")]

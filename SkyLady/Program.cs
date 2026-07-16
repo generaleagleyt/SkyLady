@@ -58,6 +58,127 @@ namespace SkyLady.SkyLady
             }
         }
 
+        // Adds a race to an armor's armature (all its ArmorAddons) so the body/armor renders
+        // for that race. Scoped deliberately - we only ever call this on the hybrid race's own
+        // body/skin, never the whole load order, to avoid bloating the patch.
+        private static void RegisterRaceOnArmor(FormKey armorFk, FormKey raceFk, IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
+        {
+            if (armorFk.IsNull || raceFk.IsNull) return;
+            if (!state.LinkCache.TryResolve<IArmorGetter>(armorFk, out var armor)) return;
+
+            var raceLink = new FormLink<IRaceGetter>(raceFk);
+            foreach (var aa in armor.Armature)
+            {
+                if (aa.IsNull) continue;
+                if (!state.LinkCache.TryResolve<IArmorAddonGetter>(aa.FormKey, out var arma)) continue;
+
+                var moddedArma = state.PatchMod.ArmorAddons.GetOrAddAsOverride(arma);
+                if (!moddedArma.AdditionalRaces.Any(r => r.FormKey == raceFk))
+                    moddedArma.AdditionalRaces.Add(raceLink);
+            }
+        }
+
+        // Creates a "hybrid" race that keeps the NPC's ORIGINAL (custom) race - its stats, skills,
+        // keywords, abilities - but grafts the DONOR race's appearance/body fields (eyes, hairs,
+        // head data, skeleton, skin, facegen clamps) on top. Used on the fallback path so a custom
+        // race NPC can wear a Nord/Imperial female appearance without losing its race tweaks.
+        // Cached per (original, donor) pair. Returns the original race FormKey unchanged if
+        // anything can't be resolved (safe fallback).
+        private static FormKey PseudoCopyRace(
+            FormKey originalRaceFk,
+            FormKey donorRaceFk,
+            Dictionary<(FormKey Original, FormKey Donor), FormKey> cache,
+            IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
+        {
+            if (cache.TryGetValue((originalRaceFk, donorRaceFk), out var cached))
+                return cached;
+
+            if (!state.LinkCache.TryResolve<IRaceGetter>(originalRaceFk, out var originalRace) ||
+                !state.LinkCache.TryResolve<IRaceGetter>(donorRaceFk, out var donorRace))
+            {
+                return originalRaceFk;
+            }
+
+            // Clone the balanced original (custom) race...
+            var newRace = state.PatchMod.Races.AddNew();
+            newRace.DeepCopyIn(originalRace);
+
+            // ...with a distinct EditorID so it never collides with the original.
+            newRace.EditorID = $"SkyLady_{originalRace.EditorID ?? originalRaceFk.IDString()}_as_{donorRace.EditorID ?? donorRaceFk.IDString()}";
+
+            // NPC-only race.
+            newRace.Flags &= ~Race.Flag.Playable;
+
+            // --- Graft appearance/body fields from the donor (fallback) race ---
+            if (newRace.Eyes != null && donorRace.Eyes != null)
+            {
+                newRace.Eyes.Clear();
+                newRace.Eyes.AddRange(donorRace.Eyes);
+            }
+
+            if (newRace.FaceFxPhonemes != null && donorRace.FaceFxPhonemes != null)
+            {
+                newRace.FaceFxPhonemes.Clear();
+                newRace.FaceFxPhonemes.DeepCopyIn(donorRace.FaceFxPhonemes);
+            }
+
+            newRace.FacegenFaceClamp = donorRace.FacegenFaceClamp;
+            newRace.FacegenMainClamp = donorRace.FacegenMainClamp;
+
+            if (newRace.Hairs != null && donorRace.Hairs != null)
+            {
+                newRace.Hairs.Clear();
+                newRace.Hairs.AddRange(donorRace.Hairs);
+            }
+
+            if (newRace.HeadData != null && donorRace.HeadData != null)
+            {
+                if (newRace.HeadData.Female != null && donorRace.HeadData.Female != null)
+                {
+                    newRace.HeadData.Female.Clear();
+                    newRace.HeadData.Female.DeepCopyIn(donorRace.HeadData.Female);
+                }
+                if (newRace.HeadData.Male != null && donorRace.HeadData.Male != null)
+                {
+                    newRace.HeadData.Male.Clear();
+                    newRace.HeadData.Male.DeepCopyIn(donorRace.HeadData.Male);
+                }
+            }
+
+            if (newRace.MorphRace != null && donorRace.MorphRace != null)
+            {
+                newRace.MorphRace.SetTo(donorRace.MorphRace);
+            }
+
+            if (newRace.SkeletalModel != null && donorRace.SkeletalModel != null)
+            {
+                if (newRace.SkeletalModel.Female != null && donorRace.SkeletalModel.Female != null)
+                {
+                    newRace.SkeletalModel.Female.Clear();
+                    newRace.SkeletalModel.Female.DeepCopyIn(donorRace.SkeletalModel.Female);
+                }
+                if (newRace.SkeletalModel.Male != null && donorRace.SkeletalModel.Male != null)
+                {
+                    newRace.SkeletalModel.Male.Clear();
+                    newRace.SkeletalModel.Male.DeepCopyIn(donorRace.SkeletalModel.Male);
+                }
+            }
+
+            if (newRace.Skin != null && donorRace.Skin != null)
+            {
+                newRace.Skin.SetTo(donorRace.Skin);
+            }
+
+            cache[(originalRaceFk, donorRaceFk)] = newRace.FormKey;
+
+            // Register the hybrid race on its own naked body (the grafted donor skin) so the base
+            // body renders with no neck seam.
+            RegisterRaceOnArmor(newRace.Skin?.FormKey ?? FormKey.Null, newRace.FormKey, state);
+
+            Console.WriteLine($"Pseudo-copied race '{originalRace.EditorID}' -> '{newRace.EditorID}' (appearance from '{donorRace.EditorID}')");
+            return newRace.FormKey;
+        }
+
         public static void Patch(IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
         {
             var settings = Settings.Value;
@@ -329,6 +450,8 @@ namespace SkyLady.SkyLady
             var filteredNpcs = new Dictionary<string, string>();
             var random = new Random();
             var currentRunTemplates = new Dictionary<string, string>(); // Track all templates assigned in this run
+            // Cache of hybrid races created on the fallback path, keyed by (original race, donor race).
+            var pseudoCopiedRaces = new Dictionary<(FormKey Original, FormKey Donor), FormKey>();
 
             // Load temporary templates from SkyLadyTempTemplates.json (all NPCs from last run)
             Dictionary<string, string> tempTemplates;
@@ -833,10 +956,12 @@ namespace SkyLady.SkyLady
                     .SelectMany(r => femaleTemplatesByRace.TryGetValue(r, out var t) ? t : [])
                     .ToList();
 
+                bool usedFallback = false;
                 if (templates.Count == 0 && settings.UseDefaultRaceFallback)
                 {
                     Console.WriteLine($"No templates found for race {race} for NPC {npc.EditorID ?? "Unnamed"} ({npc.FormKey}). Using default race fallback (NordRace, ImperialRace).");
                     templates = [.. new List<string> { "NordRace", "ImperialRace" }.SelectMany(r => femaleTemplatesByRace.TryGetValue(r, out var t) ? t : [])];
+                    usedFallback = true;
                 }
 
                 if (templates.Count > 0)
@@ -1039,6 +1164,21 @@ namespace SkyLady.SkyLady
                         var templateFid = template.FormKey.IDString();
                         var templateFileName = template.FormKey.ModKey.FileName.ToString();
                         var templateRace = template.Race.TryResolve(state.LinkCache)?.EditorID;
+
+                        // Fallback pseudo-copy: keep the NPC's custom-race stats but give it the
+                        // fallback (Nord/Imperial) body/appearance via a generated hybrid race.
+                        if (settings.PseudoCopyRaceOnFallback && usedFallback)
+                        {
+                            var originalRaceFk = npc.Race.FormKey;
+                            var donorRaceFk = template.Race.FormKey;
+                            if (!originalRaceFk.IsNull && !donorRaceFk.IsNull && originalRaceFk != donorRaceFk)
+                            {
+                                var pseudoRaceFk = PseudoCopyRace(originalRaceFk, donorRaceFk, pseudoCopiedRaces, state);
+                                patchedNpc.Race.SetTo(pseudoRaceFk);
+                                // Make the copied worn body render on the hybrid race too.
+                                RegisterRaceOnArmor(patchedNpc.WornArmor.FormKey, pseudoRaceFk, state);
+                            }
+                        }
 
                         var patchedNif = Path.Combine(modFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", npc.FormKey.ModKey.FileName, $"00{npcFid}.nif");
                         var patchedDds = Path.Combine(modFolderPath, "textures", "actors", "character", "facegendata", "facetint", npc.FormKey.ModKey.FileName, $"00{npcFid}.dds");
