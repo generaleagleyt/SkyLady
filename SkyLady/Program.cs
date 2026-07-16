@@ -1373,10 +1373,47 @@ namespace SkyLady.SkyLady
                 var splitMods = splitter.Split<ISkyrimMod, ISkyrimModGetter>(state.PatchMod, 250).ToList();
                 Console.WriteLine($"Split into {splitMods.Count} mods:");
 
+                // --- FIX: keep patch-created RACE records in the FIRST split file (file 0) ---
+                // New pseudo-copied races have FormKey.ModKey == PatchMod (SkyLady.esp), so they can
+                // only be authored correctly in the plugin that shares that ModKey (file 0). If the
+                // splitter scattered them into _2/_3 they become phantom overrides of a base record
+                // that doesn't exist, which breaks every NPC/ARMA -> RACE reference. Because the race
+                // is a dependency SINK (NPCs and ARMAs point at it, never the reverse), moving all
+                // races into file 0 - which every other split file lists as a master - makes the
+                // one-directional references resolve with no circular masters.
+                var mainMod = splitMods[0];
+                foreach (var mod in splitMods.Skip(1))
+                {
+                    var strayRaces = mod.Races
+                        .Where(r => r.FormKey.ModKey.Equals(state.PatchMod.ModKey))
+                        .ToList();
+
+                    foreach (var strayRace in strayRaces)
+                    {
+                        mod.Races.Remove(strayRace.FormKey);
+                        if (!mainMod.Races.Any(r => r.FormKey.Equals(strayRace.FormKey)))
+                            mainMod.Races.Add(strayRace);
+                    }
+
+                    if (strayRaces.Count > 0)
+                        Console.WriteLine($"Relocated {strayRaces.Count} pseudo-copied race(s) into {mainMod.ModKey.FileName} to keep references resolvable.");
+                }
+
                 foreach (var mod in splitMods)
                 {
                     mod.MasterReferences.Clear();
                     mod.MasterReferences.AddRange(state.PatchMod.MasterReferences.Select(m => m.DeepCopy()));
+                }
+
+                // Every non-main split file must list the main file (SkyLady.esp) as a master so its
+                // NPC/ARMA records can reach the pseudo-copied races that now live in file 0.
+                foreach (var mod in splitMods.Skip(1))
+                {
+                    if (!mod.MasterReferences.Any(m => m.Master.Equals(mainMod.ModKey)))
+                    {
+                        mod.MasterReferences.Add(new MasterReference { Master = mainMod.ModKey });
+                        Console.WriteLine($"Added {mainMod.ModKey.FileName} as master of {mod.ModKey.FileName}.");
+                    }
                 }
 
                 if (settings.FlagOutputAsEsl)
