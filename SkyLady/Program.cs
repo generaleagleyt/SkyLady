@@ -58,6 +58,86 @@ namespace SkyLady.SkyLady
             }
         }
 
+        private const string FaceGeomFolder = "meshes/actors/character/facegendata/facegeom";
+        private const string FaceTintFolder = "textures/actors/character/facegendata/facetint";
+
+        private static string FaceGeomArchivePath(string modFileName, string formId)
+            => $"{FaceGeomFolder}/{modFileName}/00{formId}.nif";
+
+        private static string FaceTintArchivePath(string modFileName, string formId)
+            => $"{FaceTintFolder}/{modFileName}/00{formId}.dds";
+
+        // Builds a lookup of facegen files contained in the load order's BSA archives.
+        // Key = normalized internal archive path (forward slashes, case-insensitive).
+        // Readers are kept alive in 'keepAliveReaders' because the returned IArchiveFile
+        // entries read lazily from the underlying archive stream/memory-map.
+        private static Dictionary<string, IArchiveFile> BuildBsaFacegenIndex(
+            IPatcherState<ISkyrimMod, ISkyrimModGetter> state,
+            List<IArchiveReader> keepAliveReaders)
+        {
+            var index = new Dictionary<string, IArchiveFile>(StringComparer.OrdinalIgnoreCase);
+
+            IEnumerable<Noggog.FilePath> archivePaths;
+            try
+            {
+                // If this overload isn't found in your version, use GameRelease.SkyrimSE instead.
+                archivePaths = Archive.GetApplicableArchivePaths(state.GameRelease, state.DataFolderPath);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Could not enumerate BSA archives ({ex.Message}). Only loose facegen files will be used.");
+                return index;
+            }
+
+            foreach (var archivePath in archivePaths)
+            {
+                try
+                {
+                    var reader = Archive.CreateReader(state.GameRelease, archivePath);
+                    keepAliveReaders.Add(reader);
+
+                    foreach (var file in reader.Files)
+                    {
+                        var path = file.Path.Replace('\\', '/');
+                        if (path.IndexOf("facegendata", StringComparison.OrdinalIgnoreCase) < 0)
+                            continue;
+                        index[path] = file; // later archives win on collision
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to read archive '{archivePath}': {ex.Message}");
+                }
+            }
+
+            Console.WriteLine($"Indexed {index.Count} facegen file(s) from {keepAliveReaders.Count} BSA archive(s).");
+            return index;
+        }
+
+        // Extracts queued BSA entries to disk (mirrors BatchCopyFiles for loose files).
+        private static void BatchExtractFiles(List<(IArchiveFile File, string DestPath)> ops)
+        {
+            if (ops.Count == 0) return;
+
+            foreach (var dir in ops.Select(o => Path.GetDirectoryName(o.DestPath)).Distinct())
+                if (dir != null) Directory.CreateDirectory(dir);
+
+            foreach (var (file, dest) in ops)
+            {
+                try
+                {
+                    using var stream = file.AsStream();
+                    using var outFs = File.Create(dest);
+                    stream.CopyTo(outFs);
+                    Console.WriteLine($"Extracted BSA facegen to: {dest}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to extract '{file.Path}' to '{dest}': {ex.Message}");
+                }
+            }
+        }
+
         // Adds a race to an armor's armature (all its ArmorAddons) so the body/armor renders
         // for that race. Scoped deliberately - we only ever call this on the hybrid race's own
         // body/skin, never the whole load order, to avoid bloating the patch.
@@ -492,6 +572,12 @@ namespace SkyLady.SkyLady
 
             // List to store file copy operations
             var fileCopyOperations = new List<(string SourcePath, string DestPath)>();
+            // Facegen files that must be extracted from a BSA instead of copied loose.
+            var bsaExtractOperations = new List<(IArchiveFile File, string DestPath)>();
+
+            // Index BSA facegen once so templates whose facegen is packed (not loose) still work.
+            var bsaReaders = new List<IArchiveReader>();
+            var bsaFacegen = BuildBsaFacegenIndex(state, bsaReaders);
 
             // Load target mods from settings
             HashSet<ModKey> requiemKeys = settings.TargetModsToPatch;
@@ -522,7 +608,10 @@ namespace SkyLady.SkyLady
                     var formId = npc.FormKey.IDString();
                     var nifPath = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", modKey, $"00{formId}.nif");
                     var ddsPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", modKey, $"00{formId}.dds");
-                    facegenCache[(modKey, formId)] = (File.Exists(nifPath), File.Exists(ddsPath));
+
+                    bool nifExists = File.Exists(nifPath) || bsaFacegen.ContainsKey(FaceGeomArchivePath(modKey, formId));
+                    bool ddsExists = File.Exists(ddsPath) || bsaFacegen.ContainsKey(FaceTintArchivePath(modKey, formId));
+                    facegenCache[(modKey, formId)] = (nifExists, ddsExists);
                 }
             }
             Console.WriteLine($"Cached facegen existence for {facegenCache.Count} NPCs.");
@@ -744,8 +833,8 @@ namespace SkyLady.SkyLady
                         else
                         {
                             string reason = !isWhitelisted ? "Not in Template Whitelist" :
-                                           !notBlacklisted ? "Blacklisted mod" :
-                                            "Missing loose facegen files";
+               !notBlacklisted ? "Blacklisted mod" :
+                "Missing facegen files (loose or BSA)";
                             skippedTemplates[npc.FormKey.ToString()] = (npc.FormKey.ModKey.FileName.ToString(), reason);
                         }
 
@@ -1190,13 +1279,23 @@ namespace SkyLady.SkyLady
 
                         if (nifExists && ddsExists)
                         {
-                            fileCopyOperations.Add((templateNif, patchedNif));
-                            fileCopyOperations.Add((templateDds, patchedDds));
+                            // NIF: prefer loose, fall back to BSA.
+                            if (File.Exists(templateNif))
+                                fileCopyOperations.Add((templateNif, patchedNif));
+                            else if (bsaFacegen.TryGetValue(FaceGeomArchivePath(templateFileName, templateFid), out var nifArch))
+                                bsaExtractOperations.Add((nifArch, patchedNif));
+
+                            // DDS: prefer loose, fall back to BSA.
+                            if (File.Exists(templateDds))
+                                fileCopyOperations.Add((templateDds, patchedDds));
+                            else if (bsaFacegen.TryGetValue(FaceTintArchivePath(templateFileName, templateFid), out var ddsArch))
+                                bsaExtractOperations.Add((ddsArch, patchedDds));
+
                             facegenCopied = true;
                         }
                         else
                         {
-                            Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({template.FormKey}) from {templateFileName} — missing loose facegen files (.nif: {nifExists}, .dds: {ddsExists})");
+                            Console.WriteLine($"Skipping template {template.EditorID ?? "Unnamed"} ({template.FormKey}) from {templateFileName} — missing facegen files, loose or BSA (.nif: {nifExists}, .dds: {ddsExists})");
                             continue;
                         }
                     }
@@ -1244,6 +1343,13 @@ namespace SkyLady.SkyLady
                 Console.WriteLine($"Performing final batch file copy for {fileCopyOperations.Count} files...");
                 BatchCopyFiles(fileCopyOperations);
                 fileCopyOperations.Clear();
+            }
+
+            if (bsaExtractOperations.Count > 0)
+            {
+                Console.WriteLine($"Extracting {bsaExtractOperations.Count} facegen file(s) from BSA archives...");
+                BatchExtractFiles(bsaExtractOperations);
+                bsaExtractOperations.Clear();
             }
 
             // Save current run templates to SkyLadyTempTemplates.json
@@ -1469,25 +1575,19 @@ namespace SkyLady.SkyLady
                     Console.WriteLine($"Mod {i}: {outputFileName}, Records: {recordCount}");
 
                     mod.WriteToBinary(
-    Path.Combine(state.DataFolderPath, outputFileName),
-    new BinaryWriteParameters
-    {
-        ModKey = ModKeyOption.NoCheck,
-        MastersListContent = MastersListContentOption.Iterate
-    });
+                        Path.Combine(state.DataFolderPath, outputFileName),
+                        new BinaryWriteParameters
+                        {
+                            ModKey = ModKeyOption.NoCheck,
+                            MastersListContent = MastersListContentOption.Iterate
+                    });
                 }
                 Console.WriteLine("Data Folder Path: " + state.DataFolderPath);
                 throw new Exception("This error indicates that the patcher ran successfully. The final ESP was split due to Force ESP Splitting or master count. This error is intentional to prevent Synthesis from crashing and will be removed once ESP splitting is officially implemented in the Synthesis application.");
             }
             else
             {
-                // Force ESP Splitting is OFF. Do NOT invoke the custom splitter here, even if the
-                // master count exceeds 250. The custom splitter cannot wire up cross-file masters
-                // for patch-created records (pseudo-copied RACEs, their ARMA overrides, and the NPCs
-                // that reference them), which scatters interdependent records across files and
-                // produces "Could not be resolved" errors. Instead we hand the finished PatchMod
-                // back so modern Synthesis can perform its NATIVE multi-master splitting, which
-                // correctly adds sibling plugins as masters and remaps FormKeys.
+                // Force ESP Splitting is OFF. Do NOT invoke the custom splitter here, even if the master count exceeds 250.
                 var contributingMods = new HashSet<ModKey>();
                 foreach (var rec in state.PatchMod.EnumerateMajorRecords())
                 {
