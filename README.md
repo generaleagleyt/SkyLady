@@ -9,9 +9,27 @@
 ## Description
 **SkyLady** is a Synthesis patcher that transforms male NPCs into females, using appearance templates from existing female NPCs in your load order. It adjusts gender flags, assigns equivalent female voices (configurable), and forwards changes from other mods, ensuring seamless integration. While designed to patch entire load orders, SkyLady offers flexible settings like single NPC patching, NPC and mod blacklists, and template preservation for consistent results across runs.
 
-Inspired by SkyFem, an xEdit-based patcher, SkyLady overcomes the 254-master limit with ESP splitting. It processes large load orders (tested with 4000+ plugins) in minutes, making it an efficient tool to feminize your Skyrim world.
+**Update 1.1.0**
+SkyLady can now patch female NPCs as well. The new options can be found at the bottom of the patcher settings. Possible uses:
 
-**ESP splitting**, a work-in-progress Synthesis feature, automatically handles the 254-master limit by dividing the output into multiple ESP files. When the limit is reached, SkyLady creates a new ESP (e.g., SkyLady_2.esp) and continues patching seamlessly. Once the patcher is done, an intentional error with a success message will appear. Future Synthesis updates will make this process fully automatic.
+- You download a quest mod that adds new NPCs with vanilla looks. There is no female NPC replacer for that mod. You can use SkyLady to give them random female looks - improving their visuals (check last few images).
+- Give some or all vanilla female NPCs new random looks.
+
+**New Settings:**
+**Patch Only Female NPCs** - With this option enabled, the patcher will skip all male NPCs (except locked ones) and patch only female NPCs. 
+
+**Female Target Mods** - If Patch Only Female NPCs is enabled and this list is empty, SkyLady will patch all female NPCs in your load order. If you add any mods to this list, SkyLady will patch only female NPCs from the listed mods.
+
+All existing SkyLady settings play nicely with these new ones and they respect each other.
+
+Patch Single NPC Only - Now also works if you pick a female NPC.
+
+NPCs with Locked Templates - Female NPCs can now also be locked.
+
+Preserve Last Run Appearances - Female NPCs that were patched last time will receive the same templates as before.
+
+NPCs with Locked Templates and Preserve Last Run Appearances now have a higher priority. 
+Example: You lock 1 male NPC, then enable "Patch Only Female NPCs". The locked male NPC will also be patched.
 
 ## Features
 - Transforms male NPCs into females, setting gender flags, applying female voices (configurable) and forwarding other mods' changes. NPCs will use your default body and physics. Compatible with OBody NG.
@@ -151,6 +169,12 @@ Skip specific NPCs. If you want specific NPCs to remain male, add them here. You
 
 - **Flag Output Plugins as ESL**:
 Automatically flag split ESP plugins as ESL (ESP-FE). Synthesis Profile Setting that does this doesn't work on split ESP plugins yet, so you can use this option instead. Only applies if the ESP was split.
+
+- **Patch Only Female NPCs:**
+With this option enabled, the patcher will skip all male NPCs (except locked ones) and patch only female NPCs. 
+
+- **Female Target Mods:**
+If Patch Only Female NPCs is enabled and this list is empty, SkyLady will patch all female NPCs in your load order. If you add any mods to this list, SkyLady will patch only female NPCs from the listed mods.
 
 ## Understanding Templates
 - **What is a Template?**: The term "template" has many meanings in Skyrim modding, but for the purpose of SkyLady, we will use our own. By a "template" we understand a female NPC from your load order used as a source for appearance data (e.g. head parts, tint layers, facegen files, hair color, height, weight). In other words, it's a look of a female NPC.
