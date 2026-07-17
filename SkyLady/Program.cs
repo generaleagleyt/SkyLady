@@ -77,11 +77,12 @@ namespace SkyLady.SkyLady
         {
             var index = new Dictionary<string, IArchiveFile>(StringComparer.OrdinalIgnoreCase);
 
-            IEnumerable<Noggog.FilePath> archivePaths;
+            List<string> archivePaths;
             try
             {
-                // If this overload isn't found in your version, use GameRelease.SkyrimSE instead.
-                archivePaths = Archive.GetApplicableArchivePaths(state.GameRelease, state.DataFolderPath);
+                archivePaths = Directory
+                    .EnumerateFiles(state.DataFolderPath.Path, "*.bsa", SearchOption.TopDirectoryOnly)
+                    .ToList();
             }
             catch (Exception ex)
             {
