@@ -44,7 +44,7 @@ namespace SkyLady.SkyLady
         public bool ForceEspSplitting { get; set; } = false;
 
         [SynthesisSettingName("SkyLady Mod Folder")]
-        [SynthesisTooltip("Paste here a path to your SkyLady mod folder containing SkyLadyMarker.txt (e.g., C:\\Skyrim\\ModlistName\\mods\\SkyLady). Required for file creation.")]
+        [SynthesisTooltip("Path to your (persistent) SkyLady mod folder where loose facegen files will be written, e.g. C:\\...\\mods\\SkyLady. If left empty, files go to <Data>\\SkyLady, which managed/Stock Game setups may wipe.")]
         public string SkyLadyModFolder { get; set; } = "";
 
         [SynthesisSettingName("Patch Single NPC Only")]

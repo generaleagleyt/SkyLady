@@ -275,20 +275,35 @@ namespace SkyLady.SkyLady
                 Console.WriteLine("Template Whitelist is empty - using templates from all mods (except blacklisted ones).");
             }
 
-            // Locate the SkyLady mod folder using the user-specified setting
+            // Locate the SkyLady mod folder.
+            // The old SkyLadyMarker.txt requirement is obsolete now that the folder is set explicitly.
             string modFolderPath;
-            if (!string.IsNullOrEmpty(settings.SkyLadyModFolder) &&
-                Directory.Exists(settings.SkyLadyModFolder) &&
-                File.Exists(Path.Combine(settings.SkyLadyModFolder, "SkyLadyMarker.txt")))
+            if (!string.IsNullOrWhiteSpace(settings.SkyLadyModFolder))
             {
+                if (!Directory.Exists(settings.SkyLadyModFolder))
+                {
+                    throw new Exception(
+                        $"'SkyLady Mod Folder' is set to '{settings.SkyLadyModFolder}', but that folder does not exist. " +
+                        "Fix the path in the patcher settings so it points to your (persistent) SkyLady mod folder.");
+                }
+
                 modFolderPath = settings.SkyLadyModFolder;
                 Console.WriteLine($"Using user-specified SkyLady mod folder at {modFolderPath}.");
+
+                // Backwards-compat only: recreate the marker if missing, so older tooling still sees it.
+                var markerPath = Path.Combine(modFolderPath, "SkyLadyMarker.txt");
+                if (!File.Exists(markerPath))
+                {
+                    try { File.WriteAllText(markerPath, "SkyLady mod folder marker."); } catch { /* non-fatal */ }
+                }
             }
             else
             {
                 modFolderPath = Path.Combine(state.DataFolderPath, "SkyLady");
                 Directory.CreateDirectory(modFolderPath);
-                Console.WriteLine($"SkyLadyMarker.txt not found or invalid mod folder specified. Created default SkyLady mod folder at {modFolderPath}.");
+                Console.WriteLine($"No 'SkyLady Mod Folder' specified. Falling back to {modFolderPath}. " +
+                    "WARNING: if this is a managed/Stock Game Data folder, your mod manager may delete these files " +
+                    "afterward. Set 'SkyLady Mod Folder' to a persistent mod folder to avoid this.");
             }
 
             // Define paths using the mod folder
