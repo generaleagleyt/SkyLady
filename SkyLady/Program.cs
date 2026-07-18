@@ -142,7 +142,7 @@ namespace SkyLady.SkyLady
         // Adds a race to an armor's armature (all its ArmorAddons) so the body/armor renders
         // for that race. Scoped deliberately - we only ever call this on the hybrid race's own
         // body/skin, never the whole load order, to avoid bloating the patch.
-        private static void RegisterRaceOnArmor(FormKey armorFk, FormKey raceFk, IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
+        private static void RegisterRaceOnArmor(FormKey armorFk, FormKey raceFk, FormKey donorRaceFk, IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
         {
             if (armorFk.IsNull || raceFk.IsNull) return;
             if (!state.LinkCache.TryResolve<IArmorGetter>(armorFk, out var armor)) return;
@@ -152,6 +152,17 @@ namespace SkyLady.SkyLady
             {
                 if (aa.IsNull) continue;
                 if (!state.LinkCache.TryResolve<IArmorAddonGetter>(aa.FormKey, out var arma)) continue;
+
+                // SAFETY: only attach the pseudo-race to body parts that actually belong to the DONOR
+                // race. Otherwise a shared/creature skin addon would get the humanoid pseudo-race bolted onto it, making the
+                // NPC render a horse/dragon/etc. on their body. Creature addons never list the donor
+                // race, so this cleanly excludes them.
+                if (!donorRaceFk.IsNull)
+                {
+                    bool appliesToDonor = arma.Race.FormKey == donorRaceFk
+                        || arma.AdditionalRaces.Any(r => r.FormKey == donorRaceFk);
+                    if (!appliesToDonor) continue;
+                }
 
                 var moddedArma = state.PatchMod.ArmorAddons.GetOrAddAsOverride(arma);
                 if (!moddedArma.AdditionalRaces.Any(r => r.FormKey == raceFk))
@@ -253,8 +264,9 @@ namespace SkyLady.SkyLady
             cache[(originalRaceFk, donorRaceFk)] = newRace.FormKey;
 
             // Register the hybrid race on its own naked body (the grafted donor skin) so the base
-            // body renders with no neck seam.
-            RegisterRaceOnArmor(newRace.Skin?.FormKey ?? FormKey.Null, newRace.FormKey, state);
+            // body renders with no neck seam. Guarded by the donor race so only the donor's body
+            // addons are touched (never creature skins).
+            RegisterRaceOnArmor(newRace.Skin?.FormKey ?? FormKey.Null, newRace.FormKey, donorRaceFk, state);
 
             Console.WriteLine($"Pseudo-copied race '{originalRace.EditorID}' -> '{newRace.EditorID}' (appearance from '{donorRace.EditorID}')");
             return newRace.FormKey;
@@ -1280,8 +1292,8 @@ namespace SkyLady.SkyLady
                             {
                                 var pseudoRaceFk = PseudoCopyRace(originalRaceFk, donorRaceFk, pseudoCopiedRaces, state);
                                 patchedNpc.Race.SetTo(pseudoRaceFk);
-                                // Make the copied worn body render on the hybrid race too.
-                                RegisterRaceOnArmor(patchedNpc.WornArmor.FormKey, pseudoRaceFk, state);
+                                // Make the copied worn body render on the hybrid race too (donor-guarded).
+                                RegisterRaceOnArmor(patchedNpc.WornArmor.FormKey, pseudoRaceFk, donorRaceFk, state);
                             }
                         }
 
