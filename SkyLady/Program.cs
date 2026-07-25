@@ -493,7 +493,6 @@ namespace SkyLady.SkyLady
             }
 
             // Locate the SkyLady mod folder.
-            // The old SkyLadyMarker.txt requirement is obsolete now that the folder is set explicitly.
             string modFolderPath;
             if (!string.IsNullOrWhiteSpace(settings.SkyLadyModFolder))
             {
@@ -506,13 +505,6 @@ namespace SkyLady.SkyLady
 
                 modFolderPath = settings.SkyLadyModFolder;
                 Console.WriteLine($"Using user-specified SkyLady mod folder at {modFolderPath}.");
-
-                // Backwards-compat only: recreate the marker if missing, so older tooling still sees it.
-                var markerPath = Path.Combine(modFolderPath, "SkyLadyMarker.txt");
-                if (!File.Exists(markerPath))
-                {
-                    try { File.WriteAllText(markerPath, "SkyLady mod folder marker."); } catch { /* non-fatal */ }
-                }
             }
             else
             {
