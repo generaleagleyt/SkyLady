@@ -393,6 +393,22 @@ namespace SkyLady.SkyLady
             return sb.ToString();
         }
 
+        // Recast resolves a face by following faceNPC pointers, so a loop of assignments (A wears
+        // B's face while B wears A's) would hang the engine's face resolution; Recast rejects such
+        // entries and the NPC keeps its old face. Loops can only arise among SkyLady's OWN
+        // assignments (a patched female can be another female's donor), so walking this run's
+        // assignment map is sufficient.
+        private static bool WouldCreateFaceChainCycle(FormKey target, FormKey donor, Dictionary<FormKey, FormKey> assignments)
+        {
+            var current = donor;
+            for (int hops = 0; hops < 100; hops++)
+            {
+                if (current == target) return true;
+                if (!assignments.TryGetValue(current, out current)) return false;
+            }
+            return true; // a 100-deep donor chain is almost certainly a loop - refuse it
+        }
+
         // An ArmorAddon only draws for the races it lists, so a body borrowed from another race may
         // have no addon willing to render it - the NPC then shows no body at all. Recast can assign a
         // body but cannot edit records, so SkyLady has to check this itself.
@@ -476,18 +492,6 @@ namespace SkyLady.SkyLady
                     "afterward. Set 'SkyLady Mod Folder' to a persistent mod folder to avoid this.");
             }
 
-            // Leftovers from a previous Synthesis-ESP run would keep overriding the heads Recast
-            // assigns. Report them and let the user decide - deleting their files is not our call.
-            if (recastMode)
-            {
-                var staleFacegen = Path.Combine(modFolderPath, "meshes", "actors", "character", "facegendata", "facegeom");
-                if (Directory.Exists(staleFacegen))
-                {
-                    Console.WriteLine($"WARNING: copied facegen from a previous Synthesis-ESP run is still present at {staleFacegen}.");
-                    Console.WriteLine("Recast does not need it, and it will keep overriding the heads Recast assigns.");
-                    Console.WriteLine("Delete that folder (and the matching textures\\...\\facetint folder) yourself once you are happy with the Recast output.");
-                }
-            }
 
             var racesPath = Path.Combine(modFolderPath, "SkyLady races.txt");
             var raceCompatibilityPath = Path.Combine(modFolderPath, "SkyLady Race Compatibility.txt");
@@ -816,6 +820,27 @@ namespace SkyLady.SkyLady
             var overrideCache = state.LoadOrder.PriorityOrder.WinningOverrides<INpcGetter>()
                 .ToDictionary(n => n.FormKey, n => n);
 
+            // NPCs that other NPCs inherit their looks from via the "Use Traits" template flag.
+            // The engine copies a root's traits into every inheritor while plugins load - BEFORE
+            // any SKSE plugin runs - so a runtime recast of a root never reaches the inheritors
+            // (confirmed in-game: Requiem for the Indifferent's 44k variant NPCs stayed male while
+            // their recast roots were female). Only changes baked into the load order propagate,
+            // so these roots keep the classic ESP override + facegen copy even in Recast mode.
+            var traitsTemplateRoots = new HashSet<FormKey>();
+            if (recastMode)
+            {
+                foreach (var npcRecord in overrideCache.Values)
+                {
+                    if (npcRecord.Configuration.TemplateFlags.HasFlag(NpcConfiguration.TemplateFlag.Traits)
+                        && !npcRecord.Template.IsNull
+                        && state.LinkCache.TryResolve<INpcGetter>(npcRecord.Template.FormKey, out _))
+                    {
+                        traitsTemplateRoots.Add(npcRecord.Template.FormKey);
+                    }
+                }
+                Console.WriteLine($"Found {traitsTemplateRoots.Count} 'Use Traits' template root NPC(s). These will be patched via classic ESP override so their inheriting NPCs pick up the change.");
+            }
+
             // Race compatibility mapping - Load from SkyLady Race Compatibility.txt
             var raceCompatibilityMap = new Dictionary<string, List<string>>();
             try
@@ -1004,8 +1029,11 @@ namespace SkyLady.SkyLady
             Console.WriteLine($"Indexed {voiceTypesByEditorId.Count} voice type(s) by EditorID.");
 
             // Recast mode: one rendered [[npcs]] block per patched NPC, written out at the end.
+            // recastAssignments mirrors it as target -> donor, for face-chain cycle detection.
             var recastBlocks = new List<string>();
+            var recastAssignments = new Dictionary<FormKey, FormKey>();
             int recastArmaFixups = 0;
+            int recastEspRootCount = 0;   // Traits roots patched classically within Recast mode
 
             // Collect female templates and count male NPCs (excluding Player and presets)
             int maleNpcCount = 0;
@@ -1285,10 +1313,15 @@ namespace SkyLady.SkyLady
                             var tempLockedTemplateRace = tempLockedTemplate.Race.TryResolve(state.LinkCache)?.EditorID;
                             bool tempIsBlacklisted = blacklistedTemplateNpcs.Contains(tempFormKey)
                                 || blacklistedMods.Contains(tempFormKey.ModKey.FileName);
+                            bool tempCreatesCycle = recastMode && WouldCreateFaceChainCycle(npc.FormKey, tempFormKey, recastAssignments);
 
                             if (tempIsBlacklisted)
                             {
                                 Console.WriteLine($"[{(isLocked ? "Locked" : "Preserved")}] Temp template {tempTemplateKey} for {npc.EditorID ?? "Unnamed"} is now blacklisted. Will assign new template now.");
+                            }
+                            else if (tempCreatesCycle)
+                            {
+                                Console.WriteLine($"[{(isLocked ? "Locked" : "Preserved")}] Temp template {tempTemplateKey} for {npc.EditorID ?? "Unnamed"} would create a face-swap loop. Will assign new template now.");
                             }
                             else if (tempLockedTemplateRace != null && compatibleRaces.Contains(tempLockedTemplateRace))
                             {
@@ -1313,8 +1346,12 @@ namespace SkyLady.SkyLady
                         }
                     }
 
-                    // Recast mode writes no NPC records at all, so there is nothing to override.
-                    if (!recastMode)
+                    // Traits-template roots need the classic ESP treatment even in Recast mode - see
+                    // the traitsTemplateRoots comment. For everything else, Recast mode writes no NPC
+                    // records at all, so there is nothing to override.
+                    bool isTraitsRoot = recastMode && traitsTemplateRoots.Contains(npc.FormKey);
+
+                    if (!recastMode || isTraitsRoot)
                     {
                         patchedNpc = state.PatchMod.Npcs.GetOrAddAsOverride(npc);
                         if (patchedNpc == null)
@@ -1373,6 +1410,12 @@ namespace SkyLady.SkyLady
                                 continue;
                             }
 
+                            if (recastMode && WouldCreateFaceChainCycle(npc.FormKey, candidate.FormKey, recastAssignments))
+                            {
+                                Console.WriteLine($"Skipping template {candidate.EditorID ?? "Unnamed"} ({candidate.FormKey}) for {npc.EditorID ?? "Unnamed"} - would create a face-swap loop");
+                                continue;
+                            }
+
                             template = candidate;
                             break;
                         }
@@ -1418,7 +1461,7 @@ namespace SkyLady.SkyLady
                             continue;
                         }
 
-                        if (recastMode)
+                        if (recastMode && !isTraitsRoot)
                         {
                             // The donor's body lives on her NPC record OR on her race - resolve both.
                             var bodyFk = ResolveEffectiveSkin(template, state);
@@ -1436,6 +1479,7 @@ namespace SkyLady.SkyLady
                                 voiceTypesByEditorId, settings, random, state);
 
                             recastBlocks.Add(BuildRecastBlock(npc, template, bodyFk, voiceFk, isFemale));
+                            recastAssignments[npc.FormKey] = template.FormKey;
                         }
                         else
                         {
@@ -1455,6 +1499,8 @@ namespace SkyLady.SkyLady
                                 fileCopyOperations.Add((templateDds, patchedDds));
                             else if (bsaFacegen.TryGetValue(FaceTintArchivePath(templateFileName, templateFid), out var ddsArch))
                                 bsaExtractOperations.Add((ddsArch, patchedDds));
+
+                            if (recastMode) recastEspRootCount++;
                         }
 
                         facegenCopied = true;
@@ -1537,6 +1583,24 @@ namespace SkyLady.SkyLady
 
                     File.WriteAllText(recastFile, toml.ToString());
                     Console.WriteLine($"Wrote {recastBlocks.Count} Recast entry(ies) to {recastFile}");
+
+                    if (recastEspRootCount > 0)
+                        Console.WriteLine($"Patched {recastEspRootCount} 'Use Traits' template root NPC(s) via classic ESP override + facegen copy, so their inheriting NPCs (Requiem variants etc.) pick up the change at load.");
+
+                    // Loose facegen always beats Recast's runtime assignment, so a full set of copies
+                    // left over from a Synthesis-ESP run silently pins every NPC's OLD face. The files
+                    // written for the template roots above are expected; a large surplus is not.
+                    var faceGeomDir = Path.Combine(modFolderPath, "meshes", "actors", "character", "facegendata", "facegeom");
+                    if (Directory.Exists(faceGeomDir))
+                    {
+                        int nifCount = Directory.EnumerateFiles(faceGeomDir, "*.nif", SearchOption.AllDirectories).Count();
+                        if (nifCount > recastEspRootCount)
+                        {
+                            Console.WriteLine($"WARNING: {nifCount} facegen mesh(es) present under {faceGeomDir}, but this run only wrote {recastEspRootCount} (template roots).");
+                            Console.WriteLine("The extra files are likely from a previous Synthesis-ESP run and will override the faces Recast assigns.");
+                            Console.WriteLine("Recommended: delete the facegeom and facetint folders, then re-run the patcher to regenerate only what this mode needs.");
+                        }
+                    }
 
                     if (recastArmaFixups > 0)
                         Console.WriteLine($"Registered {recastArmaFixups} donor body/bodies on a target race so they render (ArmorAddon overrides - the only records written in this mode).");
