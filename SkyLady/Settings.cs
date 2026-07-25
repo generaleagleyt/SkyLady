@@ -87,7 +87,7 @@ namespace SkyLady.SkyLady
         public bool UseDefaultRaceFallback { get; set; } = false;
 
         [SynthesisSettingName("Pseudo-Copy Race on Fallback")]
-        [SynthesisTooltip("Only applies when 'Use Default Race Fallback' is triggered. Instead of changing the race to Nord/Imperial, create a hybrid race that KEEPS the custom race's stats/keywords/tweaks but takes its body/appearance from the fallback race (Nord/Imperial). Has no effect in RecastToml output mode: Recast never changes an NPC's race, so no hybrid race is needed.")]
+        [SynthesisTooltip("Only applies when 'Use Default Race Fallback' is triggered. Instead of changing the race to Nord/Imperial, create a hybrid race that KEEPS the custom race's stats/keywords/tweaks but takes its body/appearance from the fallback race (Nord/Imperial). In RecastToml output mode this only affects 'Use Traits' template-root NPCs (which are still patched via ESP); TOML-recast NPCs never change race.")]
         public bool PseudoCopyRaceOnFallback { get; set; } = false;
 
         [SynthesisSettingName("Change Voices")]
@@ -127,7 +127,7 @@ namespace SkyLady.SkyLady
         public List<IFormLinkGetter<INpcGetter>> NpcsToExcludeFromPatching { get; set; } = new();
 
         [SynthesisSettingName("Flag Output Plugins as ESL")]
-        [SynthesisTooltip("If enabled, output plugins are flagged as ESL (Light Master) if they have 2048 or fewer new records.")]
+        [SynthesisTooltip("If enabled, output plugins are flagged as ESL (Light Master) if their new records fit the ESL limit: 4095 records on game 1.6.1130+ (plugin header 1.71), 2048 on older versions.")]
         public bool FlagOutputAsEsl { get; set; } = false;
 
         [SynthesisSettingName("Patch Only Female NPCs")]

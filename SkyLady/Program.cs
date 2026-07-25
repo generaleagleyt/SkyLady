@@ -409,6 +409,37 @@ namespace SkyLady.SkyLady
             return true; // a 100-deep donor chain is almost certainly a loop - refuse it
         }
 
+        // Decides whether a mod qualifies for the ESL (Small) header flag. The valid FormID range
+        // for NEW records depends on the plugin's header version: 1.71 (game 1.6.1130+) opens
+        // 0x001-0xFFF (4095 records); older headers allow only 0x800-0xFFF (2048). Modern Mutagen
+        // assigns the low IDs, so hardcoding the old range wrongly rejects valid plugins - Synthesis
+        // would then flag the output itself anyway, making the log contradict what MO2 shows.
+        private static bool CanFlagAsEsl(ISkyrimMod mod, string label)
+        {
+            uint minId = mod.ModHeader.Stats.Version >= 1.71f ? 1u : 0x800u;
+            uint capacity = 0xFFFu - minId + 1;
+            uint newRecordCount = 0;
+
+            foreach (var rec in mod.EnumerateMajorRecords())
+            {
+                if (!rec.FormKey.ModKey.Equals(mod.ModKey)) continue;
+                newRecordCount++;
+                if (rec.FormKey.ID < minId || rec.FormKey.ID > 0xFFF)
+                {
+                    Console.WriteLine($"Cannot flag {label} as ESL: New record {rec.FormKey} has FormID outside the ESL range (0x{minId:X}-0xFFF for header version {mod.ModHeader.Stats.Version:0.00}).");
+                    return false;
+                }
+            }
+
+            if (newRecordCount > capacity)
+            {
+                Console.WriteLine($"Cannot flag {label} as ESL: {newRecordCount} new records exceed the ESL capacity of {capacity} for header version {mod.ModHeader.Stats.Version:0.00}.");
+                return false;
+            }
+
+            return true;
+        }
+
         // An ArmorAddon only draws for the races it lists, so a body borrowed from another race may
         // have no addon willing to render it - the NPC then shows no body at all. Recast can assign a
         // body but cannot edit records, so SkyLady has to check this itself.
@@ -456,7 +487,7 @@ namespace SkyLady.SkyLady
                 Console.WriteLine("Requires the Recast SKSE plugin (Nexus 186025), SKSE and Address Library.");
                 Console.WriteLine("'SkyLady partsToCopy.txt' is IGNORED here - Recast copies the whole face bundle.");
                 if (settings.PseudoCopyRaceOnFallback)
-                    Console.WriteLine("'Pseudo-Copy Race on Fallback' is IGNORED here - Recast never changes an NPC's race, so no hybrid race is needed.");
+                    Console.WriteLine("'Pseudo-Copy Race on Fallback' only applies to 'Use Traits' template-root NPCs here (they are still patched via ESP). TOML-recast NPCs never change race.");
                 if (settings.ForceEspSplitting)
                     Console.WriteLine("'Force ESP Splitting' is IGNORED here - there is no master explosion to split.");
             }
@@ -1798,30 +1829,7 @@ namespace SkyLady.SkyLady
                 {
                     foreach (var mod in splitMods)
                     {
-                        bool canBeEsl = true;
-                        uint newRecordCount = 0;
-
-                        foreach (var rec in mod.EnumerateMajorRecords())
-                        {
-                            if (rec.FormKey.ModKey.Equals(mod.ModKey))
-                            {
-                                newRecordCount++;
-                                if (rec.FormKey.ID < 0x800 || rec.FormKey.ID > 0xFFF)
-                                {
-                                    canBeEsl = false;
-                                    Console.WriteLine($"Cannot flag split ESP as ESL: New record {rec.FormKey} has FormID outside ESL range (0x800 to 0xFFF).");
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (newRecordCount > 2048)
-                        {
-                            canBeEsl = false;
-                            Console.WriteLine($"Cannot flag split ESP as ESL: Exceeds 2048 new records (found {newRecordCount}).");
-                        }
-
-                        if (canBeEsl)
+                        if (CanFlagAsEsl(mod, "split ESP"))
                         {
                             mod.ModHeader.Flags |= SkyrimModHeader.HeaderFlag.Small;
                             Console.WriteLine($"Flagged split ESP as ESL.");
@@ -1889,30 +1897,7 @@ namespace SkyLady.SkyLady
 
                 if (settings.FlagOutputAsEsl)
                 {
-                    bool canBeEsl = true;
-                    uint newRecordCount = 0;
-
-                    foreach (var rec in state.PatchMod.EnumerateMajorRecords())
-                    {
-                        if (rec.FormKey.ModKey.Equals(state.PatchMod.ModKey))
-                        {
-                            newRecordCount++;
-                            if (rec.FormKey.ID < 0x800 || rec.FormKey.ID > 0xFFF)
-                            {
-                                canBeEsl = false;
-                                Console.WriteLine($"Cannot flag output ESP as ESL: New record {rec.FormKey} has FormID outside ESL range (0x800 to 0xFFF).");
-                                break;
-                            }
-                        }
-                    }
-
-                    if (newRecordCount > 2048)
-                    {
-                        canBeEsl = false;
-                        Console.WriteLine($"Cannot flag output ESP as ESL: Exceeds 2048 new records (found {newRecordCount}).");
-                    }
-
-                    if (canBeEsl)
+                    if (CanFlagAsEsl(state.PatchMod, "output ESP"))
                     {
                         state.PatchMod.ModHeader.Flags |= SkyrimModHeader.HeaderFlag.Small;
                         Console.WriteLine($"Flagged output ESP as ESL.");
