@@ -18,7 +18,6 @@ namespace SkyLady.SkyLady
     {
         private static readonly char[] LineSeparators = ['\n', '\r'];
 
-        // Define a variable to hold the settings
         static Lazy<PatcherSettings> Settings = null!;
 
         public static async Task<int> Main(string[] args)
@@ -33,7 +32,8 @@ namespace SkyLady.SkyLady
                 .Run(args);
         }
 
-        // Helper method to perform batch file copying
+        // Creates every destination directory up front, then copies. Called once per run rather than
+        // per NPC so a few thousand facegen copies don't each pay for a directory check.
         private static void BatchCopyFiles(List<(string SourcePath, string DestPath)> fileCopyOperations)
         {
             if (fileCopyOperations.Count == 0) return;
@@ -155,7 +155,7 @@ namespace SkyLady.SkyLady
 
                 // SAFETY: only attach the pseudo-race to body parts that actually belong to the DONOR
                 // race. Otherwise a shared/creature skin addon would get the humanoid pseudo-race bolted onto it, making the
-                // NPC render a horse/dragon/etc. on their body. Creature addons never list the donor
+                // NPC render a horse/dragon/etc. (funny bug) on their body. Creature addons never list the donor
                 // race, so this cleanly excludes them.
                 if (!donorRaceFk.IsNull)
                 {
@@ -275,9 +275,9 @@ namespace SkyLady.SkyLady
         // Resolves the naked body ("skin") a donor NPC actually renders with. Skyrim looks in two
         // places: the NPC's own WornArmor link, and - when that link is empty - its RACE's Skin.
         // Only the first travels with a plain field copy, so a donor whose body is defined on a
-        // custom race (Ciri/Triss-style followers) would otherwise leave the patched NPC with NO
-        // skin at all. It then falls back to its OWN race's body, whose textures don't match the
-        // donor's baked facetint - a visible neck seam. Returns FormKey.Null if neither is set.
+        // custom race would otherwise leave the patched NPC with NO skin at all. It then falls back
+        // to its OWN race's body, whose textures don't match the donor's baked facetint - a visible
+        // neck seam. Returns FormKey.Null if neither is set.
         private static FormKey ResolveEffectiveSkin(INpcGetter donor, IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
         {
             if (!donor.WornArmor.IsNull)
@@ -291,8 +291,8 @@ namespace SkyLady.SkyLady
         }
 
         // Copies a female template's appearance onto the patched NPC, honouring partsToCopy.txt.
-        // Called from BOTH the new-template and the locked/preserved-template paths. These used to
-        // be the same ~45 lines duplicated once per path, so every fix had to be made twice.
+        // Shared by the new-template and locked/preserved-template paths so both produce an identical
+        // result for the same template.
         private static void ApplyTemplateAppearance(
             Npc patchedNpc,
             INpcGetter npc,
@@ -332,8 +332,8 @@ namespace SkyLady.SkyLady
             patchedNpc.Weight = template.Weight;
         }
 
-        // Picks the female voice that should replace an NPC's current voice, or FormKey.Null to keep
-        // it. Split out of the appearance copy so the ESP and Recast paths make the SAME choice.
+        // Picks the female voice that should replace an NPC's current voice, or FormKey.Null to keep it.
+        // Shared by the ESP and Recast output paths so both arrive at the same voice for a given NPC.
         private static FormKey ChooseFemaleVoice(
             INpcGetter npc,
             string race,
@@ -369,9 +369,9 @@ namespace SkyLady.SkyLady
             return voiceTypesByEditorId.TryGetValue(chosen, out var fk) ? fk : FormKey.Null;
         }
 
-        // Formats a FormKey the way Recast's TOML selectors expect: "0x00AABBCC~Plugin.esp" - the
-        // 6-hex plugin-relative ID with a leading "00", the same convention SkyLady already uses for
-        // facegen filenames. Verified in-game to resolve correctly for ESL-flagged plugins too.
+        // Formats a FormKey the way Recast's TOML selectors expect: "0x00AABBCC~Plugin.esp".
+        // The ID is plugin-relative, which is why this also works for ESL-flagged plugins - it is the
+        // same convention as the facegen filenames, not the runtime FE... form.
         private static string RecastToken(FormKey fk) => $"0x00{fk.ID:X6}~{fk.ModKey.FileName}";
 
         // Renders one [[npcs]] block for the Recast patch file.
@@ -393,9 +393,9 @@ namespace SkyLady.SkyLady
             return sb.ToString();
         }
 
-        // Recast can hand an NPC a `body`, but it cannot teach that body's ArmorAddons to render for
-        // the target's race - an ArmorAddon only draws for races it lists. If none of the skin's
-        // addons cover the target race the body renders as NOTHING, which is worse than a seam.
+        // An ArmorAddon only draws for the races it lists, so a body borrowed from another race may
+        // have no addon willing to render it - the NPC then shows no body at all. Recast can assign a
+        // body but cannot edit records, so SkyLady has to check this itself.
         private static bool SkinCoversRace(FormKey skinFk, FormKey raceFk, IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
         {
             if (skinFk.IsNull || raceFk.IsNull) return true;
@@ -424,6 +424,12 @@ namespace SkyLady.SkyLady
             else
             {
                 Console.WriteLine("Template Whitelist is empty - using templates from all mods (except blacklisted ones).");
+            }
+
+            int blacklistedNpcCount = settings.TemplateNpcBlacklist.Count(n => !n.IsNull);
+            if (blacklistedNpcCount > 0)
+            {
+                Console.WriteLine($"Template NPC Blacklist active: {blacklistedNpcCount} individual NPC(s) excluded from the template pool.");
             }
 
             bool recastMode = settings.OutputMode == SkyLadyOutputMode.RecastToml;
@@ -470,8 +476,8 @@ namespace SkyLady.SkyLady
                     "afterward. Set 'SkyLady Mod Folder' to a persistent mod folder to avoid this.");
             }
 
-            // Leftovers from a previous Synthesis-ESP run would keep overriding heads in Recast mode.
-            // Report them; NEVER delete them - that is the user's call, not the patcher's.
+            // Leftovers from a previous Synthesis-ESP run would keep overriding the heads Recast
+            // assigns. Report them and let the user decide - deleting their files is not our call.
             if (recastMode)
             {
                 var staleFacegen = Path.Combine(modFolderPath, "meshes", "actors", "character", "facegendata", "facegeom");
@@ -483,7 +489,6 @@ namespace SkyLady.SkyLady
                 }
             }
 
-            // Define paths using the mod folder
             var racesPath = Path.Combine(modFolderPath, "SkyLady races.txt");
             var raceCompatibilityPath = Path.Combine(modFolderPath, "SkyLady Race Compatibility.txt");
             var partsToCopyPath = Path.Combine(modFolderPath, "SkyLady partsToCopy.txt");
@@ -712,10 +717,10 @@ namespace SkyLady.SkyLady
                 }
             }
 
-            // Load configuration files
             var humanoidRaces = new HashSet<string>(File.ReadAllLines(racesPath).Select(line => line.Trim()).Where(line => !string.IsNullOrEmpty(line) && !line.StartsWith("#")));
             var partsToCopy = File.ReadAllLines(partsToCopyPath).ToHashSet().Where(line => !string.IsNullOrEmpty(line) && !line.StartsWith("#")).ToHashSet();
             HashSet<string> blacklistedMods = [.. settings.TemplateModBlacklist.Select(modKey => modKey.FileName.String)];
+            HashSet<FormKey> blacklistedTemplateNpcs = [.. settings.TemplateNpcBlacklist.Where(n => !n.IsNull).Select(n => n.FormKey)];
             var femaleTemplatesByRace = new Dictionary<string, List<INpcGetter>>();
             var successfulTemplatesByRace = new Dictionary<string, List<INpcGetter>>();
             var skippedTemplates = new Dictionary<string, (string ModName, string Reason)>();
@@ -746,7 +751,6 @@ namespace SkyLady.SkyLady
                 tempTemplates = [];
             }
 
-            // Build a dictionary of locked NPCs for quick lookup
             var lockedNpcs = settings.LockedTemplates
                 .Where(n => !n.Npc.IsNull)
                 .ToDictionary(n => n.Npc.FormKey, n => n);
@@ -763,16 +767,15 @@ namespace SkyLady.SkyLady
                 }
             }
 
-            // List to store file copy operations
+            // Facegen work is queued here and flushed once at the end of the run: loose files get
+            // copied, BSA-packed ones get extracted.
             var fileCopyOperations = new List<(string SourcePath, string DestPath)>();
-            // Facegen files that must be extracted from a BSA instead of copied loose.
             var bsaExtractOperations = new List<(IArchiveFile File, string DestPath)>();
 
             // Index BSA facegen once so templates whose facegen is packed (not loose) still work.
             var bsaReaders = new List<IArchiveReader>();
             var bsaFacegen = BuildBsaFacegenIndex(state, bsaReaders);
 
-            // Load target mods from settings
             HashSet<ModKey> requiemKeys = settings.TargetModsToPatch;
             bool patchEntireLoadOrder = true;
             if (requiemKeys.Any())
@@ -809,12 +812,10 @@ namespace SkyLady.SkyLady
             }
             Console.WriteLine($"Cached facegen existence for {facegenCache.Count} NPCs.");
 
-            // Cache all NPC overrides
             Console.WriteLine("Building NPC override cache...");
             var overrideCache = state.LoadOrder.PriorityOrder.WinningOverrides<INpcGetter>()
                 .ToDictionary(n => n.FormKey, n => n);
 
-            // START OF SECTION 2
             // Race compatibility mapping - Load from SkyLady Race Compatibility.txt
             var raceCompatibilityMap = new Dictionary<string, List<string>>();
             try
@@ -991,9 +992,9 @@ namespace SkyLady.SkyLady
                 throw new Exception("SkyLady Voice Compatibility.txt is empty or invalid. At least one valid voice mapping or fallback is required.");
             }
 
-            // EditorID -> VoiceType, built ONCE. The old code re-scanned every VoiceType in the load
-            // order for each patched NPC, which is O(voices x NPCs). First match wins, matching the
-            // previous FirstOrDefault-over-PriorityOrder behaviour.
+            // EditorID -> VoiceType. Voice Compatibility.txt names voices by EditorID, so this is the
+            // bridge to actual records. Built with TryAdd, so on a duplicate EditorID the highest
+            // load-order priority wins.
             var voiceTypesByEditorId = new Dictionary<string, FormKey>(StringComparer.OrdinalIgnoreCase);
             foreach (var vt in state.LoadOrder.PriorityOrder.VoiceType().WinningOverrides())
             {
@@ -1027,26 +1028,28 @@ namespace SkyLady.SkyLady
                     if (npc.Configuration.Flags.HasFlag(NpcConfiguration.Flag.Female))
                     {
                         bool notBlacklisted = !blacklistedMods.Contains(npc.FormKey.ModKey.FileName);
+                        bool notBlacklistedNpc = !blacklistedTemplateNpcs.Contains(npc.FormKey);
                         bool isWhitelisted = settings.TemplateModWhitelist.Count == 0 ||
                                             settings.TemplateModWhitelist.Contains(npc.FormKey.ModKey);
 
                         var (nifExists, ddsExists) = facegenCache[(npc.FormKey.ModKey.FileName.ToString(), npc.FormKey.IDString())];
 
-                        // Blacklist wins if mod is in both lists
-                        if (notBlacklisted && isWhitelisted && nifExists && ddsExists)
+                        // Rejecting here keeps the NPC out of the pool entirely, so no later code can
+                        // pick it. Blacklists win over the whitelist if a mod appears in both.
+                        if (notBlacklisted && notBlacklistedNpc && isWhitelisted && nifExists && ddsExists)
                         {
                             femaleTemplatesByRace[race] = femaleTemplatesByRace.GetValueOrDefault(race, []);
                             femaleTemplatesByRace[race].Add(npc);
                         }
                         else
                         {
-                            string reason = !isWhitelisted ? "Not in Template Whitelist" :
-               !notBlacklisted ? "Blacklisted mod" :
-                "Missing facegen files (loose or BSA)";
+                            string reason = !notBlacklistedNpc ? "Blacklisted NPC template" :
+                                !isWhitelisted ? "Not in Template Whitelist" :
+                                !notBlacklisted ? "Blacklisted mod" :
+                                "Missing facegen files (loose or BSA)";
                             skippedTemplates[npc.FormKey.ToString()] = (npc.FormKey.ModKey.FileName.ToString(), reason);
                         }
 
-                        // === FIX: Count eligible females INSIDE the female check ===
                         bool isFemaleTargetMod = settings.FemaleTargetMods.Contains(npc.FormKey.ModKey);
                         bool isAllFemalesTarget = settings.PatchOnlyFemaleNPCs && settings.FemaleTargetMods.Count == 0;
                         bool hasPreservedTemplate = tempTemplates.ContainsKey(npc.FormKey.ToString());
@@ -1064,12 +1067,12 @@ namespace SkyLady.SkyLady
                             }
                             else if (npc.Configuration.TemplateFlags.HasFlag(NpcConfiguration.TemplateFlag.Traits))
                             {
-                                // Skip
+                                // Appearance comes from a template, so this NPC is not patchable.
                             }
                             else if (settings.ModsToExcludeFromPatching.Contains(npc.FormKey.ModKey) ||
                             settings.NpcsToExcludeFromPatching.Any(ex => ex.FormKey == npc.FormKey))
                             {
-                                // Skip
+                                // User-excluded: not eligible, and not worth reporting as blacklisted.
                             }
                             else
                             {
@@ -1093,10 +1096,10 @@ namespace SkyLady.SkyLady
                         {
                             maleNpcCount++;
 
-                            // Skip NPCs with Template Flags (Use Traits) from eligible count
                             if (npc.Configuration.TemplateFlags.HasFlag(NpcConfiguration.TemplateFlag.Traits))
                             {
-                                // Skip
+                                // Counted in maleNpcCount above (they exist), but never eligible:
+                                // appearance comes from the template, not from this record.
                             }
                             else if (settings.ModsToExcludeFromPatching.Contains(npc.FormKey.ModKey))
                             {
@@ -1130,7 +1133,7 @@ namespace SkyLady.SkyLady
                 Console.WriteLine($"Found {femaleTemplatesByRace[race].Count} female templates for race {race}");
             }
 
-            // SECTION 3 and 4: Unified NPC patching loop
+            // Main patching loop - males and females share it; the filters below decide who qualifies.
             int totalSingleNpcs = settings.NpcsToPatch.Count;
             var patchedNpcs = new HashSet<FormKey>();
 
@@ -1139,7 +1142,9 @@ namespace SkyLady.SkyLady
                 if (patchedNpcs.Contains(npc.FormKey))
                     continue;
 
-                // === HARD SKIP FOR NPCs WITH "USE TRAITS" TEMPLATE FLAG ===
+                // An NPC with the "Use Traits" template flag takes its appearance from its template,
+                // not from its own record, so patching it changes nothing visible. Mods like Requiem
+                // create thousands of these - skipping them is also what keeps the NPC count sane.
                 if (npc.Configuration.TemplateFlags.HasFlag(NpcConfiguration.TemplateFlag.Traits))
                 {
                     filteredNpcs[npc.EditorID + " (" + npc.FormKey.IDString() + ")"] = "Filtered (Has Use Traits template flag)";
@@ -1274,8 +1279,18 @@ namespace SkyLady.SkyLady
                              && FormKey.TryFactory(tempTemplateKey, out var tempFormKey)
                              && state.LinkCache.TryResolve<INpcGetter>(tempFormKey, out var tempLockedTemplate))
                         {
+                            // This path resolves the remembered template straight from the JSON, so it
+                            // never passes through the template pool - every pool rule the user can
+                            // change between runs has to be re-checked here or a stale template sticks.
                             var tempLockedTemplateRace = tempLockedTemplate.Race.TryResolve(state.LinkCache)?.EditorID;
-                            if (tempLockedTemplateRace != null && compatibleRaces.Contains(tempLockedTemplateRace))
+                            bool tempIsBlacklisted = blacklistedTemplateNpcs.Contains(tempFormKey)
+                                || blacklistedMods.Contains(tempFormKey.ModKey.FileName);
+
+                            if (tempIsBlacklisted)
+                            {
+                                Console.WriteLine($"[{(isLocked ? "Locked" : "Preserved")}] Temp template {tempTemplateKey} for {npc.EditorID ?? "Unnamed"} is now blacklisted. Will assign new template now.");
+                            }
+                            else if (tempLockedTemplateRace != null && compatibleRaces.Contains(tempLockedTemplateRace))
                             {
                                 template = tempLockedTemplate;
                                 useLockedTemplate = true;
@@ -1342,10 +1357,9 @@ namespace SkyLady.SkyLady
                             }
                         }
 
-                        // SELECT a template only - applying it is done once, below, so the ESP and
-                        // Recast paths share the same choice. (Previously the template was assigned
-                        // before the blacklist check, so an all-blacklisted pool could leave a
-                        // blacklisted template in place; now it correctly ends up as none.)
+                        // Selection only. Applying happens once below, so both output modes act on the
+                        // same choice. Assigning `template` only after the checks pass matters: an
+                        // all-blacklisted pool must end as no template, not the last one examined.
                         foreach (var candidate in validTemplates)
                         {
                             // Prevent female from being assigned herself as template
@@ -1482,8 +1496,6 @@ namespace SkyLady.SkyLady
                 }
             }
 
-            // START OF SECTION 5
-            // Perform final batch copy for any remaining files
             if (fileCopyOperations.Count > 0)
             {
                 Console.WriteLine($"Performing final batch file copy for {fileCopyOperations.Count} files...");
@@ -1599,19 +1611,18 @@ namespace SkyLady.SkyLady
             }
             else
             {
-                // Only show the main male patching line if we actually patched NEW males
+                // Each line is conditional so a run that only preserved or only locked doesn't print a
+                // misleading "patched 0 out of N" headline.
                 if (newlyPatchedMaleCount > 0)
                 {
                     Console.WriteLine($"Successfully patched {newlyPatchedMaleCount} out of {eligibleMaleNpcCount} eligible male NPCs with facegen.");
                 }
 
-                // Show message for explicitly locked NPCs
                 if (lockedMaleCount > 0)
                 {
                     Console.WriteLine($"Patched {lockedMaleCount} locked NPC(s) using their saved templates.");
                 }
 
-                // Show message for preserved NPCs (only triggers if the setting was enabled)
                 if (preservedMaleCount > 0)
                 {
                     Console.WriteLine($"Preserved appearances for {preservedMaleCount} male NPC(s) from the previous run.");
@@ -1656,7 +1667,7 @@ namespace SkyLady.SkyLady
                 Console.WriteLine($"Warning: Failed to delete previous split ESP files: {ex.Message}. Continuing with patching.");
             }
 
-            // Add a small delay to ensure file handles are released before Synthesis writes the output
+            // Give the facegen copy/extract handles time to close before Synthesis writes the output.
             Thread.Sleep(2000);
 
             // Check if splitting is needed based on settings or master count.
@@ -1669,7 +1680,8 @@ namespace SkyLady.SkyLady
                 var splitMods = splitter.Split<ISkyrimMod, ISkyrimModGetter>(state.PatchMod, 250).ToList();
                 Console.WriteLine($"Split into {splitMods.Count} mods:");
 
-                // --- FIX: consolidate all patch-created RACE records into file 0 ---
+                // Patch-created RACE records must all live in file 0, and this is not optional.
+                //
                 // The splitter copies NEW records (FormKey.ModKey == PatchMod) via
                 // DuplicateIntoAsNewRecord(newMod, new FormKey(newMod.ModKey, oldID)), which REASSIGNS
                 // their ModKey to whatever cluster they land in (e.g. SkyLady_2.esp:ID). The NPC/ARMA
@@ -1678,10 +1690,10 @@ namespace SkyLady.SkyLady
                 // and its clustering strips the inputMod.ModKey master, so a race is never kept with
                 // its referencers - the defining record ends up where they can't reach it.
                 //
-                // Fix: pull every RACE out of the split files and rebuild it in file 0 under its
+                // So: pull every RACE out of the split files and rebuild it in file 0 under its
                 // ORIGINAL FormKey (SkyLady.esp:ID). NPC/ARMA links still use that key and every other
                 // file lists file 0 as a master, so the one-directional references resolve. The race
-                // is a dependency sink, so no circular masters.
+                // is a dependency sink, so this cannot create circular masters.
                 var mainMod = splitMods[0];
                 var release = mainMod.SkyrimRelease;
                 int relocatedRaces = 0;
@@ -1788,11 +1800,27 @@ namespace SkyLady.SkyLady
                 }
                 var masterCount = contributingMods.Count;
                 Console.WriteLine($"Calculated master count: {masterCount} (based on contributing mods).");
-                Console.WriteLine("Force ESP Splitting disabled - letting Synthesis write/split the output natively.");
 
-                if (masterCount > 250)
+                if (recastMode)
                 {
-                    Console.WriteLine("WARNING: Master count exceeds 250. Ensure you are on a Synthesis version that supports native ESP splitting; otherwise enable 'Force ESP Splitting'.");
+                    Console.WriteLine("Output plugin carries ArmorAddon fixups only - no splitting applies.");
+
+                    // Reachable in principle: one master per mod supplying a body that needed a race
+                    // registered. 'Force ESP Splitting' is ignored in this mode, so don't suggest it.
+                    if (masterCount > 250)
+                    {
+                        Console.WriteLine("WARNING: the ArmorAddon fixup plugin exceeds 250 masters. Synthesis 0.36+ splits the output natively; " +
+                            "on an older version some donor bodies may fail to render.");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Force ESP Splitting disabled - letting Synthesis write/split the output natively.");
+
+                    if (masterCount > 250)
+                    {
+                        Console.WriteLine("WARNING: Master count exceeds 250. Ensure you are on a Synthesis version that supports native ESP splitting; otherwise enable 'Force ESP Splitting'.");
+                    }
                 }
 
                 if (settings.FlagOutputAsEsl)

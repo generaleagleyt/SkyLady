@@ -63,7 +63,7 @@ namespace SkyLady.SkyLady
         public int RecastPatchPriority { get; set; } = 100;
 
         [SynthesisSettingName("Force ESP Splitting")]
-        [SynthesisTooltip("If you encounter 'Too Many Masters' Synthesis error, enable this option to split the final ESP.")]
+        [SynthesisTooltip("If you encounter 'Too Many Masters' Synthesis error, enable this option to split the final ESP. Has no effect in RecastToml output mode - that mode produces no master-heavy plugin to split.")]
         public bool ForceEspSplitting { get; set; } = false;
 
         [SynthesisSettingName("SkyLady Mod Folder")]
@@ -87,7 +87,7 @@ namespace SkyLady.SkyLady
         public bool UseDefaultRaceFallback { get; set; } = false;
 
         [SynthesisSettingName("Pseudo-Copy Race on Fallback")]
-        [SynthesisTooltip("Only applies when 'Use Default Race Fallback' is triggered. Instead of changing the race to Nord/Imperial, create a hybrid race that KEEPS the custom race's stats/keywords/tweaks but takes its body/appearance from the fallback race (Nord/Imperial).")]
+        [SynthesisTooltip("Only applies when 'Use Default Race Fallback' is triggered. Instead of changing the race to Nord/Imperial, create a hybrid race that KEEPS the custom race's stats/keywords/tweaks but takes its body/appearance from the fallback race (Nord/Imperial). Has no effect in RecastToml output mode: Recast never changes an NPC's race, so no hybrid race is needed.")]
         public bool PseudoCopyRaceOnFallback { get; set; } = false;
 
         [SynthesisSettingName("Change Voices")]
@@ -103,12 +103,16 @@ namespace SkyLady.SkyLady
         public List<LockedNpcTemplate> LockedTemplates { get; set; } = new();
 
         [SynthesisSettingName("Template Mod Blacklist")]
-        [SynthesisTooltip("Mods to exclude from template collection (e.g., Skyrim.esm for modded setups to avoid vanilla looks). Vanilla mods require loose facegen files.")]
+        [SynthesisTooltip("Mods to exclude from template collection (e.g., Skyrim.esm for modded setups to avoid vanilla looks).")]
         public HashSet<ModKey> TemplateModBlacklist { get; set; } = new();
 
         [SynthesisSettingName("Template Mod Whitelist")]
         [SynthesisTooltip("Only female templates from these mods will be used. Leave empty to use templates from all mods (except those in Template Mod Blacklist).")]
         public HashSet<ModKey> TemplateModWhitelist { get; set; } = new();
+
+        [SynthesisSettingName("Template NPC Blacklist")]
+        [SynthesisTooltip("Individual female NPCs to exclude from the template pool. Use this instead of 'Template Mod Blacklist' when you only want to exclude a few NPCs from an otherwise good mod - corpses, thralls, test characters, or a unique face you don't want duplicated across the world.")]
+        public List<IFormLinkGetter<INpcGetter>> TemplateNpcBlacklist { get; set; } = new();
 
         [SynthesisSettingName("Target Mods to Patch")]
         [SynthesisTooltip("Select the mods to patch. Leave empty to patch the entire load order.")]
