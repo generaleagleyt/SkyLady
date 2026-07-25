@@ -36,15 +36,38 @@ namespace SkyLady.SkyLady
         }
     }
 
+    // How SkyLady delivers its results.
+    public enum SkyLadyOutputMode
+    {
+        // Classic behaviour: NPC record overrides in a Synthesis ESP + copied facegen files.
+        SynthesisEsp,
+
+        // EXPERIMENTAL: no NPC overrides and no facegen copies. SkyLady writes a Recast TOML
+        // patch instead and the Recast SKSE plugin repoints each NPC's face at runtime.
+        RecastToml,
+    }
+
     // Settings class for GUI
     public class PatcherSettings
     {
+        [SynthesisSettingName("Output Mode")]
+        [SynthesisTooltip("SynthesisEsp = classic behaviour (NPC overrides in an ESP + copied facegen files).\n" +
+            "RecastToml = EXPERIMENTAL. Writes a Recast TOML patch instead: no NPC record overrides, no facegen " +
+            "copying, no master limit. Requires the Recast SKSE plugin (Nexus 186025) plus SKSE and Address Library.\n" +
+            "Do NOT let both outputs target the same NPCs - delete the old ESP and its copied facegen when you switch.")]
+        public SkyLadyOutputMode OutputMode { get; set; } = SkyLadyOutputMode.SynthesisEsp;
+
+        [SynthesisSettingName("Recast Patch Priority")]
+        [SynthesisTooltip("Only used in RecastToml mode. Recast resolves two patches targeting the same NPC by the " +
+            "higher priority. Raise this above a face pack's priority if you want SkyLady to win.")]
+        public int RecastPatchPriority { get; set; } = 100;
+
         [SynthesisSettingName("Force ESP Splitting")]
-        [SynthesisTooltip("If you encounter 'Too Many Masters' Synthesis error, enable this option to split the final ESP.")]
+        [SynthesisTooltip("If you encounter 'Too Many Masters' Synthesis error, enable this option to split the final ESP. Has no effect in RecastToml output mode - that mode produces no master-heavy plugin to split.")]
         public bool ForceEspSplitting { get; set; } = false;
 
         [SynthesisSettingName("SkyLady Mod Folder")]
-        [SynthesisTooltip("Paste here a path to your SkyLady mod folder containing SkyLadyMarker.txt (e.g., C:\\Skyrim\\ModlistName\\mods\\SkyLady). Required for file creation.")]
+        [SynthesisTooltip("Path to your (persistent) SkyLady mod folder where loose facegen files will be written, e.g. C:\\...\\mods\\SkyLady. If left empty, files go to <Data>\\SkyLady, which managed/Stock Game setups may wipe.")]
         public string SkyLadyModFolder { get; set; } = "";
 
         [SynthesisSettingName("Patch Single NPC Only")]
@@ -60,8 +83,12 @@ namespace SkyLady.SkyLady
         public bool PreserveLastRunAppearances { get; set; } = false;
 
         [SynthesisSettingName("Use Default Race Fallback")]
-        [SynthesisTooltip("If enabled, custom races with no female templates will use NordRace and ImperialRace templates as a fallback. If disabled, a matching race is required.")]
+        [SynthesisTooltip("If enabled, custom races with no female templates will use NordRace and ImperialRace templates as a fallback. If disabled, a matching race is required. Note: the race still needs to be inside SkyLady races.txt.")]
         public bool UseDefaultRaceFallback { get; set; } = false;
+
+        [SynthesisSettingName("Pseudo-Copy Race on Fallback")]
+        [SynthesisTooltip("Only applies when 'Use Default Race Fallback' is triggered. Instead of changing the race to Nord/Imperial, create a hybrid race that KEEPS the custom race's stats/keywords/tweaks but takes its body/appearance from the fallback race (Nord/Imperial). In RecastToml output mode this only affects 'Use Traits' template-root NPCs (which are still patched via ESP); TOML-recast NPCs never change race.")]
+        public bool PseudoCopyRaceOnFallback { get; set; } = false;
 
         [SynthesisSettingName("Change Voices")]
         [SynthesisTooltip("If enabled, male voices will be changed to their female counterparts according to Voice Compatibility.txt. If disabled, original voices are preserved.")]
@@ -76,12 +103,16 @@ namespace SkyLady.SkyLady
         public List<LockedNpcTemplate> LockedTemplates { get; set; } = new();
 
         [SynthesisSettingName("Template Mod Blacklist")]
-        [SynthesisTooltip("Mods to exclude from template collection (e.g., Skyrim.esm for modded setups to avoid vanilla looks). Vanilla mods require loose facegen files.")]
+        [SynthesisTooltip("Mods to exclude from template collection (e.g., Skyrim.esm for modded setups to avoid vanilla looks).")]
         public HashSet<ModKey> TemplateModBlacklist { get; set; } = new();
 
         [SynthesisSettingName("Template Mod Whitelist")]
         [SynthesisTooltip("Only female templates from these mods will be used. Leave empty to use templates from all mods (except those in Template Mod Blacklist).")]
         public HashSet<ModKey> TemplateModWhitelist { get; set; } = new();
+
+        [SynthesisSettingName("Template NPC Blacklist")]
+        [SynthesisTooltip("Individual female NPCs to exclude from the template pool. Use this instead of 'Template Mod Blacklist' when you only want to exclude a few NPCs from an otherwise good mod - corpses, thralls, test characters, or a unique face you don't want duplicated across the world.")]
+        public List<IFormLinkGetter<INpcGetter>> TemplateNpcBlacklist { get; set; } = new();
 
         [SynthesisSettingName("Target Mods to Patch")]
         [SynthesisTooltip("Select the mods to patch. Leave empty to patch the entire load order.")]
@@ -96,7 +127,7 @@ namespace SkyLady.SkyLady
         public List<IFormLinkGetter<INpcGetter>> NpcsToExcludeFromPatching { get; set; } = new();
 
         [SynthesisSettingName("Flag Output Plugins as ESL")]
-        [SynthesisTooltip("If enabled, output plugins are flagged as ESL (Light Master) if they have 2048 or fewer new records.")]
+        [SynthesisTooltip("If enabled, output plugins are flagged as ESL (Light Master) if their new records fit the ESL limit: 4095 records on game 1.6.1130+ (plugin header 1.71), 2048 on older versions.")]
         public bool FlagOutputAsEsl { get; set; } = false;
 
         [SynthesisSettingName("Patch Only Female NPCs")]
