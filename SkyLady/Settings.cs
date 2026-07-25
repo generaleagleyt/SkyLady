@@ -36,9 +36,32 @@ namespace SkyLady.SkyLady
         }
     }
 
+    // How SkyLady delivers its results.
+    public enum SkyLadyOutputMode
+    {
+        // Classic behaviour: NPC record overrides in a Synthesis ESP + copied facegen files.
+        SynthesisEsp,
+
+        // EXPERIMENTAL: no NPC overrides and no facegen copies. SkyLady writes a Recast TOML
+        // patch instead and the Recast SKSE plugin repoints each NPC's face at runtime.
+        RecastToml,
+    }
+
     // Settings class for GUI
     public class PatcherSettings
     {
+        [SynthesisSettingName("Output Mode")]
+        [SynthesisTooltip("SynthesisEsp = classic behaviour (NPC overrides in an ESP + copied facegen files).\n" +
+            "RecastToml = EXPERIMENTAL. Writes a Recast TOML patch instead: no NPC record overrides, no facegen " +
+            "copying, no master limit. Requires the Recast SKSE plugin (Nexus 186025) plus SKSE and Address Library.\n" +
+            "Do NOT let both outputs target the same NPCs - delete the old ESP and its copied facegen when you switch.")]
+        public SkyLadyOutputMode OutputMode { get; set; } = SkyLadyOutputMode.SynthesisEsp;
+
+        [SynthesisSettingName("Recast Patch Priority")]
+        [SynthesisTooltip("Only used in RecastToml mode. Recast resolves two patches targeting the same NPC by the " +
+            "higher priority. Raise this above a face pack's priority if you want SkyLady to win.")]
+        public int RecastPatchPriority { get; set; } = 100;
+
         [SynthesisSettingName("Force ESP Splitting")]
         [SynthesisTooltip("If you encounter 'Too Many Masters' Synthesis error, enable this option to split the final ESP.")]
         public bool ForceEspSplitting { get; set; } = false;
