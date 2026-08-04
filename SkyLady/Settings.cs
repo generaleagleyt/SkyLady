@@ -110,6 +110,10 @@ namespace SkyLady.SkyLady
         [SynthesisTooltip("Only female templates from these mods will be used. Leave empty to use templates from all mods (except those in Template Mod Blacklist).")]
         public HashSet<ModKey> TemplateModWhitelist { get; set; } = new();
 
+        [SynthesisSettingName("Ignore Base Game and CC Faces")]
+        [SynthesisTooltip("If enabled, NPCs whose facegen exists ONLY inside a base game or Creation Club archive are excluded from the template pool - so you get modded looks without blacklisting Skyrim.esm. Vanilla NPCs improved by a replacer are still used, because the replacer supplies their facegen (loose or in its own BSA). Mod archives are never affected.")]
+        public bool IgnoreBaseGameBsaFaces { get; set; } = false;
+
         [SynthesisSettingName("Template NPC Blacklist")]
         [SynthesisTooltip("Individual female NPCs to exclude from the template pool. Use this instead of 'Template Mod Blacklist' when you only want to exclude a few NPCs from an otherwise good mod - corpses, thralls, test characters, or a unique face you don't want duplicated across the world.")]
         public List<IFormLinkGetter<INpcGetter>> TemplateNpcBlacklist { get; set; } = new();

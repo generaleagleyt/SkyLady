@@ -67,15 +67,48 @@ namespace SkyLady.SkyLady
         private static string FaceTintArchivePath(string modFileName, string formId)
             => $"{FaceTintFolder}/{modFileName}/00{formId}.dds";
 
+        // Recognises the archives that ship WITH the game rather than with a mod, using Bethesda's
+        // own naming convention: an archive belongs to plugin P when it is named "P.bsa" or
+        // "P - Something.bsa". Requiring the " - " separator matters - it matches
+        // "Skyrim - Meshes0.bsa" while leaving a mod called "Skyrim Sewers.bsa" alone.
+        // "_ResourcePack.bsa" is the AE bundle of Creation Club assets.
+        private static bool IsBaseGameArchive(string archiveFileName, IEnumerable<ModKey> loadOrderKeys)
+        {
+            var name = Path.GetFileNameWithoutExtension(archiveFileName);
+
+            if (name.Equals("_ResourcePack", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            var owners = new List<string> { "Skyrim", "Update", "Dawnguard", "HearthFires", "Dragonborn" };
+
+            // Creation Club plugins are ccXXXSSE###-Name.esm/.esl and ship same-named archives.
+            foreach (var key in loadOrderKeys)
+            {
+                if (key.FileName.String.StartsWith("cc", StringComparison.OrdinalIgnoreCase))
+                    owners.Add(key.Name);
+            }
+
+            foreach (var owner in owners)
+            {
+                if (name.Equals(owner, StringComparison.OrdinalIgnoreCase)) return true;
+                if (name.StartsWith(owner + " - ", StringComparison.OrdinalIgnoreCase)) return true;
+            }
+
+            return false;
+        }
+
         // Builds a lookup of facegen files contained in the load order's BSA archives.
         // Key = normalized internal archive path (forward slashes, case-insensitive).
+        // FromBaseGame records whether the winning provider is a game archive rather than a mod's,
+        // which is what lets 'Ignore Base Game and CC Faces' tell an untouched vanilla face from one
+        // a replacer supplied. A mod archive always beats a game archive for the same path.
         // Readers are kept alive in 'keepAliveReaders' because the returned IArchiveFile
         // entries read lazily from the underlying archive stream/memory-map.
-        private static Dictionary<string, IArchiveFile> BuildBsaFacegenIndex(
+        private static Dictionary<string, (IArchiveFile File, bool FromBaseGame)> BuildBsaFacegenIndex(
             IPatcherState<ISkyrimMod, ISkyrimModGetter> state,
             List<IArchiveReader> keepAliveReaders)
         {
-            var index = new Dictionary<string, IArchiveFile>(StringComparer.OrdinalIgnoreCase);
+            var index = new Dictionary<string, (IArchiveFile File, bool FromBaseGame)>(StringComparer.OrdinalIgnoreCase);
 
             List<string> archivePaths;
             try
@@ -90,6 +123,9 @@ namespace SkyLady.SkyLady
                 return index;
             }
 
+            var loadOrderKeys = state.LoadOrder.ListedOrder.Select(m => m.ModKey).ToList();
+            int baseGameArchiveCount = 0;
+
             foreach (var archivePath in archivePaths)
             {
                 try
@@ -97,12 +133,20 @@ namespace SkyLady.SkyLady
                     var reader = Archive.CreateReader(state.GameRelease, archivePath);
                     keepAliveReaders.Add(reader);
 
+                    bool isBaseGame = IsBaseGameArchive(Path.GetFileName(archivePath), loadOrderKeys);
+                    if (isBaseGame) baseGameArchiveCount++;
+
                     foreach (var file in reader.Files)
                     {
                         var path = file.Path.Replace('\\', '/');
                         if (path.IndexOf("facegendata", StringComparison.OrdinalIgnoreCase) < 0)
                             continue;
-                        index[path] = file; // later archives win on collision
+
+                        // Never let a game archive displace a mod archive for the same face.
+                        if (isBaseGame && index.TryGetValue(path, out var existing) && !existing.FromBaseGame)
+                            continue;
+
+                        index[path] = (file, isBaseGame);
                     }
                 }
                 catch (Exception ex)
@@ -111,7 +155,7 @@ namespace SkyLady.SkyLady
                 }
             }
 
-            Console.WriteLine($"Indexed {index.Count} facegen file(s) from {keepAliveReaders.Count} BSA archive(s).");
+            Console.WriteLine($"Indexed {index.Count} facegen file(s) from {keepAliveReaders.Count} BSA archive(s) ({baseGameArchiveCount} base game/CC).");
             return index;
         }
 
@@ -819,9 +863,21 @@ namespace SkyLady.SkyLady
                 Console.WriteLine("No target mods specified in settings - patching entire load order.");
             }
 
-            // Cache facegen file existence for NPCs with humanoid races only
+            // Cache facegen file existence for NPCs with humanoid races only.
+            // A BSA hit counts unless the ONLY provider is a game archive and the user asked to skip
+            // those - a loose file or a mod's own archive still qualifies, which is what keeps
+            // replacer-improved vanilla NPCs usable while plain vanilla faces drop out.
             Console.WriteLine("Caching facegen file existence...");
             var facegenCache = new Dictionary<(string ModKey, string FormID), (bool NifExists, bool DdsExists)>();
+            int baseGameFacesSkipped = 0;
+
+            bool BsaProvides(string archivePath)
+            {
+                if (!bsaFacegen.TryGetValue(archivePath, out var entry)) return false;
+                if (settings.IgnoreBaseGameBsaFaces && entry.FromBaseGame) return false;
+                return true;
+            }
+
             foreach (var npc in state.LoadOrder.PriorityOrder.WinningOverrides<INpcGetter>())
             {
                 var race = npc.Race.TryResolve(state.LinkCache)?.EditorID;
@@ -832,12 +888,21 @@ namespace SkyLady.SkyLady
                     var nifPath = Path.Combine(state.DataFolderPath, "meshes", "actors", "character", "facegendata", "facegeom", modKey, $"00{formId}.nif");
                     var ddsPath = Path.Combine(state.DataFolderPath, "textures", "actors", "character", "facegendata", "facetint", modKey, $"00{formId}.dds");
 
-                    bool nifExists = File.Exists(nifPath) || bsaFacegen.ContainsKey(FaceGeomArchivePath(modKey, formId));
-                    bool ddsExists = File.Exists(ddsPath) || bsaFacegen.ContainsKey(FaceTintArchivePath(modKey, formId));
+                    bool nifExists = File.Exists(nifPath) || BsaProvides(FaceGeomArchivePath(modKey, formId));
+                    bool ddsExists = File.Exists(ddsPath) || BsaProvides(FaceTintArchivePath(modKey, formId));
+
+                    if (settings.IgnoreBaseGameBsaFaces && !(nifExists && ddsExists)
+                        && bsaFacegen.ContainsKey(FaceGeomArchivePath(modKey, formId)))
+                    {
+                        baseGameFacesSkipped++;
+                    }
+
                     facegenCache[(modKey, formId)] = (nifExists, ddsExists);
                 }
             }
             Console.WriteLine($"Cached facegen existence for {facegenCache.Count} NPCs.");
+            if (settings.IgnoreBaseGameBsaFaces)
+                Console.WriteLine($"'Ignore Base Game and CC Faces' is ON: {baseGameFacesSkipped} NPC(s) excluded whose facegen only exists in a game archive.");
 
             Console.WriteLine("Building NPC override cache...");
             var overrideCache = state.LoadOrder.PriorityOrder.WinningOverrides<INpcGetter>()
@@ -1515,13 +1580,13 @@ namespace SkyLady.SkyLady
                             if (File.Exists(templateNif))
                                 fileCopyOperations.Add((templateNif, patchedNif));
                             else if (bsaFacegen.TryGetValue(FaceGeomArchivePath(templateFileName, templateFid), out var nifArch))
-                                bsaExtractOperations.Add((nifArch, patchedNif));
+                                bsaExtractOperations.Add((nifArch.File, patchedNif));
 
                             // DDS: prefer loose, fall back to BSA.
                             if (File.Exists(templateDds))
                                 fileCopyOperations.Add((templateDds, patchedDds));
                             else if (bsaFacegen.TryGetValue(FaceTintArchivePath(templateFileName, templateFid), out var ddsArch))
-                                bsaExtractOperations.Add((ddsArch, patchedDds));
+                                bsaExtractOperations.Add((ddsArch.File, patchedDds));
 
                             if (recastMode) recastEspRootCount++;
                         }
