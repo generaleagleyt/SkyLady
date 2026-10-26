@@ -801,7 +801,12 @@ namespace SkyLady.SkyLady
 
             // Index BSA facegen once so templates whose facegen is packed (not loose) still work.
             var bsaReaders = new List<IArchiveReader>();
-            var bsaFacegen = BuildBsaFacegenIndex(state, bsaReaders);
+            var bsaFacegen = settings.HandleBsaArchives
+                ? BuildBsaFacegenIndex(state, bsaReaders)
+                : new Dictionary<string, IArchiveFile>(StringComparer.OrdinalIgnoreCase);
+
+            if (!settings.HandleBsaArchives)
+                Console.WriteLine("BSA facegen handling disabled - only loose facegen files will be used.");
 
             HashSet<ModKey> requiemKeys = settings.TargetModsToPatch;
             bool patchEntireLoadOrder = true;

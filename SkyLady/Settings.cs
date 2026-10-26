@@ -70,6 +70,11 @@ namespace SkyLady.SkyLady
         [SynthesisTooltip("Path to your (persistent) SkyLady mod folder where loose facegen files will be written, e.g. C:\\...\\mods\\SkyLady. If left empty, files go to <Data>\\SkyLady, which managed/Stock Game setups may wipe.")]
         public string SkyLadyModFolder { get; set; } = "";
 
+        [SynthesisSettingName("Use Facegen From BSA Archives")]
+        [SynthesisTooltip("When enabled, templates whose facegen files are packed inside BSA archives are indexed and extracted. " +
+                  "When disabled, only loose facegen files in the Data folder are used.")]
+        public bool HandleBsaArchives = true;
+
         [SynthesisSettingName("Patch Single NPC Only")]
         [SynthesisTooltip("If enabled, only selected NPCs from target mods get new random templates. Non-selected NPCs preserve their last run appearances.")]
         public bool PatchSingleNpcOnly { get; set; } = false;
