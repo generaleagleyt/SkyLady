@@ -35,6 +35,7 @@ OrcRaceVampire: OrcRace, OrcRaceVampire
 ElderRace: ElderRace
 ElderRaceVampire: ElderRace, ElderRaceVampire
 DremoraRace: DremoraRace
+SnowElfRace: SnowElfRace
 DA13AfflictedRace: DA13AfflictedRace
 COTRRace: COTRRace, NordRace, ImperialRace
 ArgonianRaceKZ: ArgonianRaceKZ
