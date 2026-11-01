@@ -29,6 +29,7 @@ KhajiitRaceVampire
 OrcRaceVampire
 RedguardRaceVampire
 WoodElfRaceVampire
+SnowElfRace
 DA13AfflictedRace
 COTRRace
 ArgonianRaceKZ
